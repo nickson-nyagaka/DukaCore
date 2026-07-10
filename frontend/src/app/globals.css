@@ -1,0 +1,238 @@
+@import "tailwindcss";
+
+/* ─── Tailwind CSS v4 Theme Token Mapping ─── */
+@theme {
+  --font-heading: 'Raleway', sans-serif;
+  --font-body: 'Cantarell', sans-serif;
+
+  /* Semantic Surface Mappings */
+  --color-surface: var(--surface);
+  --color-card: var(--card);
+  --color-navbar: var(--navbar);
+
+  /* Semantic Typography Mappings */
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+
+  /* Semantic Border Mappings */
+  --color-border: var(--border);
+
+  /* Brand Mappings (Axis 2 - Tenant Identity) */
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-light: var(--primary-light);
+
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+
+  /* Status Mappings */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
+  /* Layout */
+  --max-w-page: 1280px;
+  --admin-sidebar-w: 260px;
+
+  /* Animations */
+  --animate-slide-up: slide-up 0.3s ease-out;
+  --animate-fade-in: fade-in 0.4s ease-out;
+  --animate-pulse-soft: pulse-soft 2s ease-in-out infinite;
+  --animate-skeleton: skeleton 1.5s ease-in-out infinite;
+}
+
+@keyframes slide-up {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes skeleton {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ─── Axis 1: Theme Mode Tokens (data-theme) ─── */
+
+/* Default Mode: DARK */
+:root,
+[data-theme="dark"] {
+  --surface: #080B13;
+  --card: #0F172A;
+  --navbar: rgba(15, 23, 42, 0.9);
+  --foreground: #F1F5F9;
+  --muted: #94A3B8;
+  --border: rgba(255, 255, 255, 0.08);
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 20px 40px -15px rgba(0, 0, 0, 0.5);
+  --shadow-nav: 0 1px 3px rgba(0, 0, 0, 0.3);
+
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --info: #3B82F6;
+
+  color-scheme: dark;
+}
+
+/* Light Mode: High-Contrast Soft Palette */
+[data-theme="light"] {
+  --surface: #F8FAFC;         /* Soft off-white app canvas */
+  --card: #FFFFFF;            /* Elevated crisp white panel */
+  --navbar: #FFFFFF;          /* Pure white navbar surface */
+  --foreground: #0F172A;      /* Deep Charcoal text (14:1 contrast ratio) */
+  --muted: #475569;           /* Dark Slate secondary text (7.1:1 contrast ratio) */
+  --border: #CBD5E1;          /* Visible divider border */
+
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 8px 24px -8px rgba(0, 0, 0, 0.08);
+  --shadow-nav: 0 1px 3px rgba(0, 0, 0, 0.05);
+
+  --success: #16A34A;
+  --warning: #D97706;
+  --danger: #DC2626;
+  --info: #2563EB;
+
+  color-scheme: light;
+}
+
+/* ─── Axis 2: Tenant Brand Tokens (data-brand) ─── */
+
+/* Default Tenant Brand: DukaCore Indigo/Rose */
+:root,
+[data-brand="default"] {
+  --primary: #4F46E5;
+  --primary-hover: #3730A3;
+  --primary-light: rgba(79, 70, 229, 0.1);
+  --accent: #E11D48;
+  --accent-hover: #BE123C;
+}
+
+/* Example Tenant Brand: Emerald Marketplace */
+[data-brand="emerald"] {
+  --primary: #059669;
+  --primary-hover: #047857;
+  --primary-light: rgba(5, 150, 105, 0.1);
+  --accent: #D97706;
+  --accent-hover: #B45309;
+}
+
+/* Example Tenant Brand: Royal Violet */
+[data-brand="violet"] {
+  --primary: #7C3AED;
+  --primary-hover: #6D28D9;
+  --primary-light: rgba(124, 58, 237, 0.1);
+  --accent: #06B6D4;
+  --accent-hover: #0891B2;
+}
+
+/* ─── Base Layer ─────────────────────────────── */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    font-family: var(--font-body);
+    @apply bg-surface text-foreground antialiased;
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    @apply font-bold tracking-tight text-foreground;
+  }
+
+  a {
+    @apply text-inherit no-underline;
+  }
+}
+
+/* ─── Semantic Component Utilities ──────────────────────────── */
+@layer utilities {
+
+  /* Surface Cards */
+  .glass {
+    @apply bg-card border border-border rounded-2xl;
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Glass Surface (Navbar & Header) */
+  .glass-surface {
+    @apply bg-navbar border-b border-border;
+    box-shadow: var(--shadow-nav);
+  }
+
+  /* Buttons */
+  .btn-pill, .btn-pill-primary, .btn-pill-accent, .btn-pill-outline, .btn-pill-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-full font-semibold text-sm transition-all duration-200 cursor-pointer;
+  }
+
+  .btn-pill-primary {
+    @apply bg-primary text-white hover:bg-primary-hover hover:-translate-y-0.5;
+    box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3);
+  }
+
+  .btn-pill-accent {
+    @apply bg-accent text-white hover:bg-accent-hover hover:-translate-y-0.5;
+  }
+
+  .btn-pill-outline {
+    @apply border-2 border-border text-foreground hover:border-primary hover:text-primary hover:bg-primary-light;
+  }
+
+  .btn-pill-ghost {
+    @apply text-foreground hover:text-primary hover:bg-primary-light;
+  }
+
+  /* Form Inputs */
+  .input-glass {
+    @apply w-full px-4 py-3 rounded-xl text-sm bg-card border border-border text-foreground outline-none transition-all duration-200;
+  }
+
+  .input-glass:focus {
+    @apply border-primary ring-2 ring-primary/20;
+  }
+
+  /* Alias used in admin pages */
+  .input-field {
+    @apply w-full px-3.5 py-2.5 rounded-xl text-sm bg-surface border border-border text-foreground outline-none transition-all duration-200;
+  }
+  .input-field:focus {
+    @apply border-primary ring-2 ring-primary/20;
+  }
+
+  /* Admin Buttons */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-primary text-white transition-all duration-200 hover:bg-primary-hover hover:-translate-y-px cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-surface border border-border text-foreground transition-all duration-200 hover:bg-card hover:border-primary hover:text-primary cursor-pointer;
+  }
+
+  /* Skeleton Loader */
+  .skeleton {
+    background: linear-gradient(90deg, var(--card) 25%, color-mix(in srgb, var(--card) 80%, var(--foreground)) 50%, var(--card) 75%);
+    background-size: 200% 100%;
+    animation: skeleton 1.5s ease-in-out infinite;
+  }
+
+  /* Badges */
+  .badge-pill {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+}

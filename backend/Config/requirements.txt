@@ -1,0 +1,11 @@
+Django>=5.0.6
+django-ninja>=1.1.0
+pydantic
+psycopg2-binary
+redis>=5.0.5
+meilisearch
+django-cors-headers
+requests
+boto3
+PyJWT>=2.8.0
+cryptography

@@ -1,0 +1,103 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: mve_postgres
+    environment:
+      - POSTGRES_DB=MVE
+      - POSTGRES_USER=nickson_nyagaka
+      - POSTGRES_PASSWORD=JoanJuma@254
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mve_backend_app
+    ports:
+      - "8001:8000"
+    environment:
+      - DEBUG=True
+      - ALLOWED_HOSTS=*
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_NAME=MVE
+      - DB_USER=nickson_nyagaka
+      - DB_PASSWORD=JoanJuma@254
+      - REDIS_URL=redis://redis:6379/0
+      - MEILI_HOST=http://meilisearch:7700
+      - MEILI_MASTER_KEY=mve_master_key_123
+      - PYTHONPATH=/app/Config
+    depends_on:
+      - db
+      - redis
+      - meilisearch
+    restart: unless-stopped
+    volumes:
+      - ./backend/Config:/app/Config
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mve_frontend_app
+    ports:
+      - "3002:3000"
+    environment:
+      - NEXT_PUBLIC_MEILI_HOST=http://localhost:7700
+      - NEXT_PUBLIC_MEILI_KEY=mve_master_key_123
+      - BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped
+    develop:
+      watch:
+        - action: sync
+          path: ./frontend
+          target: /app
+          ignore:
+            - node_modules/
+            - .next/
+        - action: sync+restart
+          path: ./frontend/package.json
+          target: /app/package.json
+        - action: rebuild
+          path: ./frontend/Dockerfile
+
+  redis:
+    image: redis:7-alpine
+    container_name: mve_redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.8
+    container_name: mve_meilisearch
+    ports:
+      - "7700:7700"
+    environment:
+      - MEILI_MASTER_KEY=mve_master_key_123
+      - MEILI_NO_ANALYTICS=true
+      - MEILI_ENV=development
+    volumes:
+      - meili_data:/meili_data
+    restart: unless-stopped
+
+  tunnel:
+    image: node:18-alpine
+    container_name: mve_tunnel
+    command: npx -y localtunnel --port 8000 --subdomain dukacore-callback-dev
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  pg_data:
+  redis_data:
+  meili_data:
