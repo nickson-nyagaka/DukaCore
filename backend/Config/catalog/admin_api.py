@@ -322,6 +322,10 @@ class ProductTypeCreateSchema(Schema):
     name: str
     schema: List[dict]
 
+class ProductTypeUpdateSchema(Schema):
+    name: Optional[str] = None
+    schema: Optional[List[dict]] = None
+
 class ProductTypeOutSchema(Schema):
     id: uuid.UUID
     name: str
@@ -344,6 +348,21 @@ def list_product_types(request):
     if request.user.role not in ['ADMIN', 'STAFF']:
         raise HttpError(403, "Forbidden")
     return ProductType.objects.all().order_by('-created_at')
+
+@router.patch("/product-types/{type_id}", response={200: ProductTypeOutSchema})
+def update_product_type(request, type_id: uuid.UUID, data: ProductTypeUpdateSchema):
+    if request.user.role not in ['ADMIN', 'STAFF']:
+        raise HttpError(403, "Forbidden")
+        
+    pt = get_object_or_404(ProductType, id=type_id)
+    
+    update_data = data.dict(exclude_unset=True)
+    for attr, value in update_data.items():
+        setattr(pt, attr, value)
+        
+    pt.save()
+    AuditLog.log(request.user, "product_type.update", {"product_type_id": str(type_id), "name": pt.name})
+    return pt
 
 @router.delete("/product-types/{type_id}")
 def delete_product_type(request, type_id: uuid.UUID):
