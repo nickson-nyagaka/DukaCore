@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { apiFetch } from '@/lib/auth'
-import { Plus, Edit2, Trash2, X, Image as ImageIcon } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, Image as ImageIcon, AlertTriangle } from 'lucide-react'
 import ModalAlert from '@/components/admin/ModalAlert'
 
 export default function AdminProducts() {
@@ -24,6 +24,25 @@ export default function AdminProducts() {
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [linkAddresses, setLinkAddresses] = useState<string[]>([])
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  // Edit Modal State
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [selectedProductId, setSelectedProductId] = useState<number | null>(null)
+  const [editForm, setEditForm] = useState({
+    name: '',
+    description: '',
+    price: '',
+    stock_quantity: '',
+    category_id: '',
+  })
+  const [editImageFiles, setEditImageFiles] = useState<File[]>([])
+  const [editLinkAddresses, setEditLinkAddresses] = useState<string[]>([])
+  const [submittingEdit, setSubmittingEdit] = useState(false)
+
+  // Delete Modal State
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [productToDelete, setProductToDelete] = useState<number | null>(null)
+  const [submittingDelete, setSubmittingDelete] = useState(false)
 
   useEffect(() => {
     fetchProducts()
@@ -51,14 +70,105 @@ export default function AdminProducts() {
     }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this product?')) return
+  const handleEditClick = (p: any) => {
+    setModalAlert(null)
+    setSelectedProductId(p.id)
+    setEditForm({
+      name: p.name || '',
+      description: p.description || '',
+      price: String(p.price) || '',
+      stock_quantity: String(p.stock_quantity) || '',
+      category_id: p.category_id ? String(p.category_id) : '',
+    })
+    setEditImageFiles([])
+    setEditLinkAddresses(p.image_urls || [])
+    setShowEditModal(true)
+  }
+
+  const handleEditProduct = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedProductId) return
+    setModalAlert(null)
+
+    const activeLinks = editLinkAddresses.filter(l => l.trim() !== '')
+    if (editImageFiles.length === 0 && activeLinks.length === 0) {
+      setModalAlert({ message: 'Please provide at least one product picture (upload or link)!', type: 'error' })
+      return
+    }
+
+    setSubmittingEdit(true)
     try {
-      await apiFetch(`/api/admin/products/${id}`, { method: 'DELETE' })
+      const urls: string[] = []
+
+      // 1. Upload new image files if selected
+      for (const file of editImageFiles) {
+        const formData = new FormData()
+        formData.append('file', file)
+        const uploadRes = await apiFetch('/api/admin/products/upload', {
+          method: 'POST',
+          body: formData
+        })
+        if (uploadRes && uploadRes.url) {
+          urls.push(uploadRes.url)
+        }
+      }
+
+      // 2. Add external link/existing addresses
+      urls.push(...activeLinks)
+
+      // 3. Update product
+      await apiFetch(`/api/admin/products/${selectedProductId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          name: editForm.name,
+          description: editForm.description,
+          price: parseFloat(editForm.price),
+          stock_quantity: parseInt(editForm.stock_quantity),
+          category_id: editForm.category_id ? parseInt(editForm.category_id) : null,
+          image_urls: urls
+        })
+      })
+
+      setToast({ message: 'Product updated successfully!', type: 'success' })
+      setShowEditModal(false)
+      setSelectedProductId(null)
+      setModalAlert(null)
       fetchProducts()
-    } catch (e) {
-      console.error(e)
-      alert('Failed to delete product')
+      setTimeout(() => {
+        setToast(null)
+      }, 10000)
+    } catch (err: any) {
+      setModalAlert({ message: err.message || 'Failed to update product', type: 'error' })
+    } finally {
+      setSubmittingEdit(false)
+    }
+  }
+
+  const handleDeleteClick = (id: number) => {
+    setModalAlert(null)
+    setProductToDelete(id)
+    setShowDeleteModal(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!productToDelete) return
+    setSubmittingDelete(true)
+    setModalAlert(null)
+    try {
+      await apiFetch(`/api/admin/products/${productToDelete}`, { method: 'DELETE' })
+      setToast({ message: 'Product deleted successfully!', type: 'success' })
+      setShowDeleteModal(false)
+      setProductToDelete(null)
+      fetchProducts()
+      setTimeout(() => {
+        setToast(null)
+      }, 10000)
+    } catch (err: any) {
+      setToast({ message: err.message || 'Failed to delete product', type: 'error' })
+      setShowDeleteModal(false)
+      setProductToDelete(null)
+    } finally {
+      setSubmittingDelete(false)
     }
   }
 
@@ -160,10 +270,10 @@ export default function AdminProducts() {
                   </span>
                 </td>
                 <td className="p-4 text-right">
-                  <button className="p-2 text-muted hover:text-primary transition-colors">
+                  <button onClick={() => handleEditClick(p)} className="p-2 text-muted hover:text-primary transition-colors cursor-pointer">
                     <Edit2 size={16} />
                   </button>
-                  <button onClick={() => handleDelete(p.id)} className="p-2 text-muted hover:text-red-500 transition-colors">
+                  <button onClick={() => handleDeleteClick(p.id)} className="p-2 text-muted hover:text-red-500 transition-colors cursor-pointer">
                     <Trash2 size={16} />
                   </button>
                 </td>
@@ -302,6 +412,169 @@ export default function AdminProducts() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <div className="glass w-full max-w-lg rounded-2xl p-6 relative border border-border shadow-2xl max-h-[90vh] overflow-y-auto">
+            <button 
+              onClick={() => setShowEditModal(false)}
+              className="absolute top-4 right-4 text-muted hover:text-foreground transition-colors cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+            <h3 className="font-bold text-xl mb-6 font-heading">Edit Product</h3>
+            <ModalAlert message={modalAlert?.message || null} type={modalAlert?.type || null} onClose={() => setModalAlert(null)} />
+            
+            <form onSubmit={handleEditProduct} className="space-y-4">
+              
+              {/* Image Upload Area */}
+              <div>
+                <label className="block text-sm font-semibold text-muted mb-1">
+                  Upload Product Pictures
+                </label>
+                <div className="border-2 border-dashed border-border rounded-xl p-6 flex flex-col items-center justify-center bg-surface/50 hover:bg-surface transition-colors relative cursor-pointer group">
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    multiple
+                    onChange={e => e.target.files && setEditImageFiles(Array.from(e.target.files))}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  {editImageFiles.length > 0 ? (
+                    <div className="text-center w-full px-4">
+                      <ImageIcon className="mx-auto text-primary mb-2 animate-pulse" size={32} />
+                      <p className="text-sm font-semibold text-primary">{editImageFiles.length} file(s) selected</p>
+                      <div className="text-[10px] text-muted max-h-16 overflow-y-auto mt-2 space-y-0.5 divide-y divide-border/30 bg-card/50 p-2 rounded-lg border border-border">
+                        {editImageFiles.map((file, idx) => (
+                          <div key={idx} className="truncate text-left py-0.5">{file.name}</div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center">
+                      <ImageIcon className="mx-auto text-muted mb-2 group-hover:text-primary transition-colors" size={32} />
+                      <p className="text-sm text-muted">Click to select files to replace current pictures</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Picture Link Addresses */}
+              <div className="space-y-2 border-t border-border/40 pt-3">
+                <label className="block text-sm font-semibold text-muted">Or Edit Picture Link Addresses</label>
+                {editLinkAddresses.map((link, idx) => (
+                  <div key={idx} className="flex gap-2 items-center">
+                    <input 
+                      type="text" 
+                      placeholder="https://example.com/image.jpg" 
+                      className="input-field text-xs flex-1" 
+                      value={link}
+                      onChange={e => {
+                        const copy = [...editLinkAddresses]
+                        copy[idx] = e.target.value
+                        setEditLinkAddresses(copy)
+                      }}
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => setEditLinkAddresses(editLinkAddresses.filter((_, i) => i !== idx))} 
+                      className="p-2 text-danger hover:bg-danger/10 rounded-xl transition-colors cursor-pointer shrink-0"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                <button 
+                  type="button" 
+                  onClick={() => setEditLinkAddresses([...editLinkAddresses, ''])}
+                  className="text-xs text-primary font-bold hover:underline cursor-pointer flex items-center gap-1 mt-1"
+                >
+                  + Add Picture URL
+                </button>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-muted mb-1">Product Name <span className="text-red-500">*</span></label>
+                <input type="text" required className="input-field" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-muted mb-1">Description</label>
+                <textarea rows={3} className="input-field" value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})}></textarea>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-semibold text-muted mb-1">Category</label>
+                <select 
+                  className="input-field" 
+                  value={editForm.category_id} 
+                  onChange={e => setEditForm({...editForm, category_id: e.target.value})}
+                >
+                  <option value="">Select Category</option>
+                  {categories.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
+                  ))}
+                </select>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-muted mb-1">Price (KES) <span className="text-red-500">*</span></label>
+                  <input type="number" step="0.01" required className="input-field" value={editForm.price} onChange={e => setEditForm({...editForm, price: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-muted mb-1">Stock Quantity <span className="text-red-500">*</span></label>
+                  <input type="number" required className="input-field" value={editForm.stock_quantity} onChange={e => setEditForm({...editForm, stock_quantity: e.target.value})} />
+                </div>
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={() => setShowEditModal(false)} className="btn-secondary flex-1 justify-center">
+                  Cancel
+                </button>
+                <button type="submit" disabled={submittingEdit} className="btn-primary flex-1 justify-center">
+                  {submittingEdit ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+          <div className="glass w-full max-w-md rounded-2xl p-6 relative border border-border shadow-2xl">
+            <button 
+              onClick={() => setShowDeleteModal(false)}
+              className="absolute top-4 right-4 text-muted hover:text-foreground transition-colors cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+            <h3 className="font-bold text-xl mb-3 font-heading text-red-500 flex items-center gap-2">
+              <AlertTriangle size={24} /> Delete Product
+            </h3>
+            <p className="text-sm text-muted mb-6">Are you sure you want to delete this product? This action cannot be undone and will hide the product from the marketplace.</p>
+            
+            <div className="flex gap-3">
+              <button 
+                type="button" 
+                onClick={() => setShowDeleteModal(false)} 
+                className="btn-secondary flex-1 justify-center"
+              >
+                Cancel
+              </button>
+              <button 
+                type="button" 
+                onClick={handleDeleteConfirm}
+                disabled={submittingDelete}
+                className="btn-primary bg-red-600 hover:bg-red-700 flex-1 justify-center border-none text-white font-bold"
+              >
+                {submittingDelete ? 'Deleting...' : 'Delete'}
+              </button>
+            </div>
           </div>
         </div>
       )}

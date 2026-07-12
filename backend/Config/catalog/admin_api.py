@@ -57,6 +57,8 @@ class ProductUpdateSchema(Schema):
     is_active: Optional[bool] = None
     custom_fields: Optional[dict] = None
     category_id: Optional[int] = None
+    image_url: Optional[str] = None
+    image_urls: Optional[List[str]] = None
 
 class ProductOutSchema(Schema):
     id: int
@@ -68,6 +70,11 @@ class ProductOutSchema(Schema):
     custom_fields: dict
     category_id: Optional[int] = None
     product_type_id: Optional[str] = None
+    image_urls: List[str] = []
+
+    @staticmethod
+    def resolve_image_urls(obj):
+        return [img.url for img in obj.images.all()]
 
 @router.post("/products", response={200: ProductOutSchema})
 def create_product(request, data: ProductCreateSchema):
@@ -121,10 +128,32 @@ def update_product(request, product_id: int, data: ProductUpdateSchema):
         
     product = get_object_or_404(Product, id=product_id)
     
-    for attr, value in data.dict(exclude_unset=True).items():
+    # Extract image fields from update
+    update_data = data.dict(exclude_unset=True)
+    image_url = update_data.pop('image_url', None)
+    image_urls = update_data.pop('image_urls', None)
+    
+    for attr, value in update_data.items():
         setattr(product, attr, value)
         
     product.save()
+    
+    # Handle image updates if explicitly sent
+    if image_urls is not None or image_url is not None:
+        from .models import ProductImage
+        urls = list(image_urls) if image_urls is not None else []
+        if image_url and image_url not in urls:
+            urls.insert(0, image_url)
+            
+        if urls:
+            product.images.all().delete()
+            for idx, url in enumerate(urls):
+                ProductImage.objects.create(
+                    product=product,
+                    url=url,
+                    is_primary=(idx == 0)
+                )
+                
     AuditLog.log(request.user, "product.update", {"product_id": product.id, "name": product.name})
     return product
 
