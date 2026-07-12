@@ -12,7 +12,7 @@ from django.core.exceptions import ValidationError
 
 from auth_app.auth import JWTAuth
 from permissions.enforce import require_permission
-from .models import Product, Category, Voucher, ProductType
+from .models import Product, Category, Voucher
 from users.models import AuditLog
 
 router = Router(auth=JWTAuth())
@@ -44,9 +44,7 @@ class ProductCreateSchema(Schema):
     price: float
     stock_quantity: int = 0
     is_active: bool = True
-    custom_fields: dict = {}
     category_id: Optional[int] = None
-    product_type_id: Optional[str] = None
     image_url: Optional[str] = None
     image_urls: List[str] = []
 
@@ -56,11 +54,9 @@ class ProductUpdateSchema(Schema):
     price: Optional[float] = None
     stock_quantity: Optional[int] = None
     is_active: Optional[bool] = None
-    custom_fields: Optional[dict] = None
     category_id: Optional[int] = None
     image_url: Optional[str] = None
     image_urls: Optional[List[str]] = None
-    product_type_id: Optional[str] = None
 
 class ProductOutSchema(Schema):
     id: int
@@ -69,9 +65,7 @@ class ProductOutSchema(Schema):
     price: float
     stock_quantity: int
     is_active: bool
-    custom_fields: dict
     category_id: Optional[int] = None
-    product_type_id: Optional[str] = None
     image_urls: List[str] = []
 
     @staticmethod
@@ -89,25 +83,15 @@ def create_product(request, data: ProductCreateSchema):
     
     slug = slugify(data.name) + "-" + str(uuid.uuid4())[:8]
     
-    product = Product(
+    product = Product.objects.create(
         name=data.name,
         slug=slug,
         description=data.description,
         price=data.price,
         stock_quantity=data.stock_quantity,
         is_active=data.is_active,
-        custom_fields=data.custom_fields,
-        category_id=data.category_id,
-        product_type_id=data.product_type_id
+        category_id=data.category_id
     )
-    
-    try:
-        product.full_clean()
-    except ValidationError as e:
-        err_msg = e.message_dict.get('custom_fields', [str(e)])[0] if hasattr(e, 'message_dict') and 'custom_fields' in e.message_dict else str(e)
-        raise HttpError(400, err_msg)
-        
-    product.save()
     
     urls = list(data.image_urls) if data.image_urls else []
     if data.image_url and data.image_url not in urls:
@@ -145,12 +129,6 @@ def update_product(request, product_id: int, data: ProductUpdateSchema):
     
     for attr, value in update_data.items():
         setattr(product, attr, value)
-        
-    try:
-        product.full_clean()
-    except ValidationError as e:
-        err_msg = e.message_dict.get('custom_fields', [str(e)])[0] if hasattr(e, 'message_dict') and 'custom_fields' in e.message_dict else str(e)
-        raise HttpError(400, err_msg)
         
     product.save()
     
@@ -318,59 +296,3 @@ def delete_category(request, category_id: int):
 
 # --- Product Types (Dynamic Schemas) ---
 
-class ProductTypeCreateSchema(Schema):
-    name: str
-    schema: List[dict]
-
-class ProductTypeUpdateSchema(Schema):
-    name: Optional[str] = None
-    schema: Optional[List[dict]] = None
-
-class ProductTypeOutSchema(Schema):
-    id: uuid.UUID
-    name: str
-    schema: List[dict]
-
-@router.post("/product-types", response={200: ProductTypeOutSchema})
-def create_product_type(request, data: ProductTypeCreateSchema):
-    if request.user.role not in ['ADMIN', 'STAFF']:
-        raise HttpError(403, "Forbidden")
-        
-    pt = ProductType.objects.create(
-        name=data.name,
-        schema=data.schema
-    )
-    AuditLog.log(request.user, "product_type.create", {"product_type_id": str(pt.id), "name": pt.name})
-    return pt
-
-@router.get("/product-types", response=List[ProductTypeOutSchema])
-def list_product_types(request):
-    if request.user.role not in ['ADMIN', 'STAFF']:
-        raise HttpError(403, "Forbidden")
-    return ProductType.objects.all().order_by('-created_at')
-
-@router.patch("/product-types/{type_id}", response={200: ProductTypeOutSchema})
-def update_product_type(request, type_id: uuid.UUID, data: ProductTypeUpdateSchema):
-    if request.user.role not in ['ADMIN', 'STAFF']:
-        raise HttpError(403, "Forbidden")
-        
-    pt = get_object_or_404(ProductType, id=type_id)
-    
-    update_data = data.dict(exclude_unset=True)
-    for attr, value in update_data.items():
-        setattr(pt, attr, value)
-        
-    pt.save()
-    AuditLog.log(request.user, "product_type.update", {"product_type_id": str(type_id), "name": pt.name})
-    return pt
-
-@router.delete("/product-types/{type_id}")
-def delete_product_type(request, type_id: uuid.UUID):
-    if request.user.role not in ['ADMIN', 'STAFF']:
-        raise HttpError(403, "Forbidden")
-        
-    pt = get_object_or_404(ProductType, id=type_id)
-    name = pt.name
-    pt.delete()
-    AuditLog.log(request.user, "product_type.delete", {"product_type_id": str(type_id), "name": name})
-    return {"success": True}

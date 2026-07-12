@@ -29,8 +29,6 @@ class ProductSchema(Schema):
     image_url: Optional[str] = None
     images: List[str] = []
     category_id: Optional[int] = None
-    product_type_id: Optional[uuid.UUID] = None
-    custom_fields: dict = {}
 
 class ProductListSchema(Schema):
     id: int
@@ -97,6 +95,4 @@ async def get_product(request, slug: str):
         image_url=primary.url if primary else None,
         images=image_urls,
         category_id=product.category_id,
-        product_type_id=product.product_type_id,
-        custom_fields=product.custom_fields or {},
     )

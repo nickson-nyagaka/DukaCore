@@ -1,16 +1,6 @@
 import uuid
 from django.db import models
-from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
-
-class ProductType(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=255)
-    schema = models.JSONField(default=list)  # list of field schemas
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def __str__(self):
-        return self.name
 
 class Category(models.Model):
     name = models.CharField(max_length=255)
@@ -24,61 +14,19 @@ class Category(models.Model):
 
 class Product(models.Model):
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='products')
-    product_type = models.ForeignKey(ProductType, null=True, blank=True, on_delete=models.SET_NULL, related_name='products')
     name = models.CharField(max_length=255)
     slug = models.SlugField(unique=True)
     description = models.TextField(blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     stock_quantity = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
-    custom_fields = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        indexes = [
-            GinIndex(fields=['custom_fields'], name='idx_prod_custom_fields_gin')
-        ]
 
     def __str__(self):
         return self.name
 
-    def clean(self):
-        super().clean()
-        
-        if self.product_type:
-            schema_fields = self.product_type.schema
-            custom_vals = self.custom_fields or {}
-            
-            for field in schema_fields:
-                name = field.get('name')
-                label = field.get('label', name)
-                ftype = field.get('type')
-                required = field.get('required', False)
-                
-                val = custom_vals.get(name)
-                if val is None or val == '':
-                    if required:
-                        raise ValidationError({
-                            'custom_fields': f"Field '{label}' is required."
-                        })
-                    continue
-                
-                if ftype == 'number':
-                    try:
-                        float(val)
-                    except (ValueError, TypeError):
-                        raise ValidationError({
-                            'custom_fields': f"Field '{label}' must be a number."
-                        })
-                elif ftype == 'boolean':
-                    if not isinstance(val, bool) and str(val).lower() not in ('true', 'false', '1', '0'):
-                        raise ValidationError({
-                            'custom_fields': f"Field '{label}' must be a boolean."
-                        })
-
     def save(self, *args, **kwargs):
-        self.clean()
         super().save(*args, **kwargs)
 
 class ProductImage(models.Model):

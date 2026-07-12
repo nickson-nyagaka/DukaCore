@@ -19,16 +19,13 @@ export default function AdminProducts() {
     price: '',
     stock_quantity: '',
     category_id: '',
-    product_type_id: '',
   })
   const [categories, setCategories] = useState<any[]>([])
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [linkAddresses, setLinkAddresses] = useState<string[]>([])
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
 
-  // Dynamic Schema State
-  const [productTypes, setProductTypes] = useState<any[]>([])
-  const [customFields, setCustomFields] = useState<Record<string, any>>({})
+
 
   // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false)
@@ -39,11 +36,9 @@ export default function AdminProducts() {
     price: '',
     stock_quantity: '',
     category_id: '',
-    product_type_id: '',
   })
   const [editImageFiles, setEditImageFiles] = useState<File[]>([])
   const [editLinkAddresses, setEditLinkAddresses] = useState<string[]>([])
-  const [editCustomFields, setEditCustomFields] = useState<Record<string, any>>({})
   const [submittingEdit, setSubmittingEdit] = useState(false)
 
   // Delete Modal State
@@ -54,7 +49,6 @@ export default function AdminProducts() {
   useEffect(() => {
     fetchProducts()
     fetchCategories()
-    fetchProductTypes()
   }, [])
 
   const fetchCategories = async () => {
@@ -66,14 +60,7 @@ export default function AdminProducts() {
     }
   }
 
-  const fetchProductTypes = async () => {
-    try {
-      const data = await apiFetch('/api/admin/product-types')
-      setProductTypes(Array.isArray(data) ? data : [])
-    } catch (e) {
-      console.error(e)
-    }
-  }
+
 
   const fetchProducts = async () => {
     setLoading(true)
@@ -96,11 +83,9 @@ export default function AdminProducts() {
       price: String(p.price) || '',
       stock_quantity: String(p.stock_quantity) || '',
       category_id: p.category_id ? String(p.category_id) : '',
-      product_type_id: p.product_type_id || '',
     })
     setEditImageFiles([])
     setEditLinkAddresses(p.image_urls || [])
-    setEditCustomFields(p.custom_fields || {})
     setShowEditModal(true)
   }
 
@@ -144,8 +129,6 @@ export default function AdminProducts() {
           price: parseFloat(editForm.price),
           stock_quantity: parseInt(editForm.stock_quantity),
           category_id: editForm.category_id ? parseInt(editForm.category_id) : null,
-          product_type_id: editForm.product_type_id || null,
-          custom_fields: editCustomFields,
           image_urls: urls
         })
       })
@@ -232,16 +215,13 @@ export default function AdminProducts() {
           price: parseFloat(form.price),
           stock_quantity: parseInt(form.stock_quantity),
           category_id: form.category_id ? parseInt(form.category_id) : null,
-          product_type_id: form.product_type_id || null,
-          custom_fields: customFields,
           image_urls: urls,
           is_active: true
         })
       })
 
       setToast({ message: 'Product created successfully!', type: 'success' })
-      setForm({ name: '', description: '', price: '', stock_quantity: '', category_id: '', product_type_id: '' })
-      setCustomFields({})
+      setForm({ name: '', description: '', price: '', stock_quantity: '', category_id: '' })
       setImageFiles([])
       setLinkAddresses([])
       fetchProducts()
@@ -392,62 +372,7 @@ export default function AdminProducts() {
                 </button>
               </div>
 
-              {/* Product Schema Selector */}
-              <div>
-                <label className="block text-sm font-semibold text-muted mb-1">Product Schema (Optional)</label>
-                <select 
-                  className="input-field" 
-                  value={form.product_type_id} 
-                  onChange={e => {
-                    setForm({...form, product_type_id: e.target.value})
-                    setCustomFields({}) // Reset custom fields
-                  }}
-                >
-                  <option value="">No Schema (Simple Product)</option>
-                  {productTypes.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              </div>
 
-              {/* Dynamic Schema Fields */}
-              {productTypes.find(t => t.id === form.product_type_id)?.schema?.length > 0 && (
-                <div className="space-y-4 p-4 rounded-xl border border-border/60 bg-surface/30">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-primary">Schema Specifications</h4>
-                  {productTypes.find(t => t.id === form.product_type_id).schema.map((field: any) => (
-                    <div key={field.name}>
-                      <label className="block text-xs font-semibold text-muted mb-1">
-                        {field.label} {field.required && <span className="text-red-500">*</span>}
-                      </label>
-                      {field.type === 'boolean' ? (
-                        <select
-                          className="input-field text-xs"
-                          value={customFields[field.name] !== undefined ? String(customFields[field.name]) : 'false'}
-                          onChange={e => setCustomFields({
-                            ...customFields,
-                            [field.name]: e.target.value === 'true'
-                          })}
-                        >
-                          <option value="false">False</option>
-                          <option value="true">True</option>
-                        </select>
-                      ) : (
-                        <input
-                          type={field.type === 'number' ? 'number' : 'text'}
-                          step={field.type === 'number' ? 'any' : undefined}
-                          required={field.required}
-                          className="input-field text-xs"
-                          value={customFields[field.name] || ''}
-                          onChange={e => setCustomFields({
-                            ...customFields,
-                            [field.name]: e.target.value
-                          })}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
 
               <div>
                 <label className="block text-sm font-semibold text-muted mb-1">Product Name <span className="text-red-500">*</span></label>
@@ -577,62 +502,7 @@ export default function AdminProducts() {
                 </button>
               </div>
 
-              {/* Product Schema Selector */}
-              <div>
-                <label className="block text-sm font-semibold text-muted mb-1">Product Schema (Optional)</label>
-                <select 
-                  className="input-field" 
-                  value={editForm.product_type_id} 
-                  onChange={e => {
-                    setEditForm({...editForm, product_type_id: e.target.value})
-                    setEditCustomFields({}) // Reset custom fields
-                  }}
-                >
-                  <option value="">No Schema (Simple Product)</option>
-                  {productTypes.map(t => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              </div>
 
-              {/* Dynamic Schema Fields */}
-              {productTypes.find(t => t.id === editForm.product_type_id)?.schema?.length > 0 && (
-                <div className="space-y-4 p-4 rounded-xl border border-border/60 bg-surface/30">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-primary">Schema Specifications</h4>
-                  {productTypes.find(t => t.id === editForm.product_type_id).schema.map((field: any) => (
-                    <div key={field.name}>
-                      <label className="block text-xs font-semibold text-muted mb-1">
-                        {field.label} {field.required && <span className="text-red-500">*</span>}
-                      </label>
-                      {field.type === 'boolean' ? (
-                        <select
-                          className="input-field text-xs"
-                          value={editCustomFields[field.name] !== undefined ? String(editCustomFields[field.name]) : 'false'}
-                          onChange={e => setEditCustomFields({
-                            ...editCustomFields,
-                            [field.name]: e.target.value === 'true'
-                          })}
-                        >
-                          <option value="false">False</option>
-                          <option value="true">True</option>
-                        </select>
-                      ) : (
-                        <input
-                          type={field.type === 'number' ? 'number' : 'text'}
-                          step={field.type === 'number' ? 'any' : undefined}
-                          required={field.required}
-                          className="input-field text-xs"
-                          value={editCustomFields[field.name] || ''}
-                          onChange={e => setEditCustomFields({
-                            ...editCustomFields,
-                            [field.name]: e.target.value
-                          })}
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
 
               <div>
                 <label className="block text-sm font-semibold text-muted mb-1">Product Name <span className="text-red-500">*</span></label>

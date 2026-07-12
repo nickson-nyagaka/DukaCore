@@ -19,8 +19,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     notFound()
   }
 
-  const customFields = product.custom_fields || {}
-  const hasSpecs = Object.keys(customFields).length > 0
   const images = Array.isArray(product.images) && product.images.length > 0 
     ? product.images 
     : (product.image_url ? [product.image_url] : [])
@@ -45,31 +43,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           <p className="text-sm text-muted dark:text-muted-dark leading-relaxed">
             {product.description}
           </p>
-
-          {/* Dynamic Specifications */}
-          {hasSpecs && (
-            <div className="border-t border-border dark:border-border-dark pt-6">
-              <h3 className="text-sm font-bold mb-4 text-foreground dark:text-foreground-dark" style={{ fontFamily: 'var(--font-heading)' }}>
-                Specifications
-              </h3>
-              <div className="glass rounded-xl overflow-hidden">
-                <table className="w-full text-sm">
-                  <tbody>
-                    {Object.entries(customFields).map(([key, val], idx) => (
-                      <tr key={key} className={idx % 2 === 0 ? 'bg-transparent' : 'bg-primary-light/30 dark:bg-primary-light/5'}>
-                        <td className="px-4 py-3 font-semibold text-muted dark:text-muted-dark capitalize w-1/3">
-                          {key.replace(/_/g, ' ')}
-                        </td>
-                        <td className="px-4 py-3 text-foreground dark:text-foreground-dark font-medium">
-                          {String(val)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
 
           {/* Add to Cart (client component) */}
           <div className="mt-auto pt-6 border-t border-border dark:border-border-dark">

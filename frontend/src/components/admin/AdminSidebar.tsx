@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { 
   LayoutDashboard, Users, Ticket, ShieldAlert, 
-  Box, Layers, ListOrdered, Store, Tags
+  Box, ListOrdered, Store, Tags
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 
@@ -12,7 +12,6 @@ const navItems = [
   { href: '/admin', label: 'Overview', icon: LayoutDashboard, permission: null, exact: true },
   { href: '/admin/products', label: 'Products', icon: Box, permission: 'product.edit', exact: false },
   { href: '/admin/categories', label: 'Categories', icon: Tags, permission: 'product.edit', exact: false },
-  { href: '/admin/product-types', label: 'Schemas', icon: Layers, permission: 'product.edit', exact: false },
   { href: '/admin/orders', label: 'Orders', icon: ListOrdered, permission: 'order.view_all', exact: false },
   { href: '/admin/team', label: 'User Management', icon: Users, permission: 'user.manage', exact: false },
   { href: '/admin/vouchers', label: 'Vouchers', icon: Ticket, permission: 'voucher.create', exact: false },
