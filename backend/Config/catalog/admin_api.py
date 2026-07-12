@@ -12,7 +12,7 @@ from django.core.exceptions import ValidationError
 
 from auth_app.auth import JWTAuth
 from permissions.enforce import require_permission
-from .models import Product, Category, Voucher
+from .models import Product, Category, Voucher, ProductType
 from users.models import AuditLog
 
 router = Router(auth=JWTAuth())
@@ -314,4 +314,44 @@ def delete_category(request, category_id: int):
     name = category.name
     category.delete()
     AuditLog.log(request.user, "category.delete", {"category_id": category_id, "name": name})
+    return {"success": True}
+
+# --- Product Types (Dynamic Schemas) ---
+
+class ProductTypeCreateSchema(Schema):
+    name: str
+    schema: List[dict]
+
+class ProductTypeOutSchema(Schema):
+    id: uuid.UUID
+    name: str
+    schema: List[dict]
+
+@router.post("/product-types", response={200: ProductTypeOutSchema})
+def create_product_type(request, data: ProductTypeCreateSchema):
+    if request.user.role not in ['ADMIN', 'STAFF']:
+        raise HttpError(403, "Forbidden")
+        
+    pt = ProductType.objects.create(
+        name=data.name,
+        schema=data.schema
+    )
+    AuditLog.log(request.user, "product_type.create", {"product_type_id": str(pt.id), "name": pt.name})
+    return pt
+
+@router.get("/product-types", response=List[ProductTypeOutSchema])
+def list_product_types(request):
+    if request.user.role not in ['ADMIN', 'STAFF']:
+        raise HttpError(403, "Forbidden")
+    return ProductType.objects.all().order_by('-created_at')
+
+@router.delete("/product-types/{type_id}")
+def delete_product_type(request, type_id: uuid.UUID):
+    if request.user.role not in ['ADMIN', 'STAFF']:
+        raise HttpError(403, "Forbidden")
+        
+    pt = get_object_or_404(ProductType, id=type_id)
+    name = pt.name
+    pt.delete()
+    AuditLog.log(request.user, "product_type.delete", {"product_type_id": str(type_id), "name": name})
     return {"success": True}
