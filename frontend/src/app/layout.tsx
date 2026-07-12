@@ -34,6 +34,7 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${raleway.variable} ${cantarell.variable}`}
+      data-scroll-behavior="smooth"
       suppressHydrationWarning
     >
       <head>
