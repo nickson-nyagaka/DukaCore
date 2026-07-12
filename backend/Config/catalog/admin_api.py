@@ -8,6 +8,7 @@ from pydantic import Field
 import os
 from django.conf import settings
 import uuid
+from django.core.exceptions import ValidationError
 
 from auth_app.auth import JWTAuth
 from permissions.enforce import require_permission
@@ -59,6 +60,7 @@ class ProductUpdateSchema(Schema):
     category_id: Optional[int] = None
     image_url: Optional[str] = None
     image_urls: Optional[List[str]] = None
+    product_type_id: Optional[str] = None
 
 class ProductOutSchema(Schema):
     id: int
@@ -87,7 +89,7 @@ def create_product(request, data: ProductCreateSchema):
     
     slug = slugify(data.name) + "-" + str(uuid.uuid4())[:8]
     
-    product = Product.objects.create(
+    product = Product(
         name=data.name,
         slug=slug,
         description=data.description,
@@ -98,6 +100,14 @@ def create_product(request, data: ProductCreateSchema):
         category_id=data.category_id,
         product_type_id=data.product_type_id
     )
+    
+    try:
+        product.full_clean()
+    except ValidationError as e:
+        err_msg = e.message_dict.get('custom_fields', [str(e)])[0] if hasattr(e, 'message_dict') and 'custom_fields' in e.message_dict else str(e)
+        raise HttpError(400, err_msg)
+        
+    product.save()
     
     urls = list(data.image_urls) if data.image_urls else []
     if data.image_url and data.image_url not in urls:
@@ -135,6 +145,12 @@ def update_product(request, product_id: int, data: ProductUpdateSchema):
     
     for attr, value in update_data.items():
         setattr(product, attr, value)
+        
+    try:
+        product.full_clean()
+    except ValidationError as e:
+        err_msg = e.message_dict.get('custom_fields', [str(e)])[0] if hasattr(e, 'message_dict') and 'custom_fields' in e.message_dict else str(e)
+        raise HttpError(400, err_msg)
         
     product.save()
     
