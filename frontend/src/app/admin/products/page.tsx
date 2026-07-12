@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { apiFetch } from '@/lib/auth'
-import { Plus, Edit2, Trash2, X, Image as ImageIcon, AlertTriangle } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, Image as ImageIcon, AlertTriangle, Search, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import ModalAlert from '@/components/admin/ModalAlert'
 
 export default function AdminProducts() {
@@ -45,6 +45,60 @@ export default function AdminProducts() {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [productToDelete, setProductToDelete] = useState<number | null>(null)
   const [submittingDelete, setSubmittingDelete] = useState(false)
+
+  // Datatable States
+  const [searchTerm, setSearchTerm] = useState('')
+  const [sortField, setSortField] = useState('name')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [itemsPerPage, setItemsPerPage] = useState(10)
+
+  // Filter products
+  const filteredProducts = products.filter(p => {
+    const search = searchTerm.toLowerCase()
+    const nameMatch = p.name?.toLowerCase().includes(search)
+    const descMatch = p.description?.toLowerCase().includes(search)
+    const cat = categories.find(c => c.id === p.category_id)
+    const catMatch = cat ? cat.name?.toLowerCase().includes(search) : false
+    return nameMatch || descMatch || catMatch
+  })
+
+  // Sort products
+  const sortedProducts = [...filteredProducts].sort((a, b) => {
+    let valA = a[sortField]
+    let valB = b[sortField]
+
+    if (sortField === 'price') {
+      valA = parseFloat(valA) || 0
+      valB = parseFloat(valB) || 0
+    } else if (sortField === 'stock_quantity') {
+      valA = parseInt(valA) || 0
+      valB = parseInt(valB) || 0
+    } else {
+      valA = String(valA || '').toLowerCase()
+      valB = String(valB || '').toLowerCase()
+    }
+
+    if (valA < valB) return sortOrder === 'asc' ? -1 : 1
+    if (valA > valB) return sortOrder === 'asc' ? 1 : -1
+    return 0
+  })
+
+  // Paginate products
+  const totalPages = Math.ceil(sortedProducts.length / itemsPerPage)
+  const indexOfLastProduct = currentPage * itemsPerPage
+  const indexOfFirstProduct = indexOfLastProduct - itemsPerPage
+  const currentProducts = sortedProducts.slice(indexOfFirstProduct, indexOfLastProduct)
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortOrder('asc')
+    }
+    setCurrentPage(1)
+  }
 
   useEffect(() => {
     fetchProducts()
@@ -250,20 +304,75 @@ export default function AdminProducts() {
           <Plus size={16} /> Add Product
         </button>
       </div>
+      {/* Search and Filters Bar */}
+      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-surface/20 p-4 rounded-xl border border-border/40 backdrop-blur-sm">
+        <div className="relative w-full sm:max-w-xs">
+          <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-muted">
+            <Search size={16} />
+          </span>
+          <input
+            type="text"
+            placeholder="Search products..."
+            className="input-glass pl-9 pr-4 py-2 w-full text-sm"
+            value={searchTerm}
+            onChange={e => {
+              setSearchTerm(e.target.value)
+              setCurrentPage(1)
+            }}
+          />
+        </div>
+        <div className="flex gap-2 items-center text-xs text-muted w-full sm:w-auto justify-end">
+          <span>Show</span>
+          <select
+            className="bg-surface border border-border rounded px-2 py-1 focus:outline-none focus:border-primary/45 cursor-pointer text-foreground"
+            value={itemsPerPage}
+            onChange={e => {
+              setItemsPerPage(Number(e.target.value))
+              setCurrentPage(1)
+            }}
+          >
+            <option value={5}>5</option>
+            <option value={10}>10</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+          </select>
+          <span>entries</span>
+        </div>
+      </div>
 
       <div className="glass rounded-xl overflow-hidden">
         <table className="w-full text-left text-sm">
           <thead className="bg-surface border-b border-border text-muted">
             <tr>
-              <th className="p-4 font-semibold">Name</th>
-              <th className="p-4 font-semibold">Price</th>
-              <th className="p-4 font-semibold">Stock</th>
-              <th className="p-4 font-semibold">Status</th>
+              <th className="p-4 font-semibold cursor-pointer select-none hover:text-primary transition-colors" onClick={() => handleSort('name')}>
+                <div className="flex items-center gap-1">
+                  Name
+                  <ArrowUpDown size={12} className={`opacity-60 ${sortField === 'name' ? 'text-primary' : ''}`} />
+                </div>
+              </th>
+              <th className="p-4 font-semibold cursor-pointer select-none hover:text-primary transition-colors" onClick={() => handleSort('price')}>
+                <div className="flex items-center gap-1">
+                  Price
+                  <ArrowUpDown size={12} className={`opacity-60 ${sortField === 'price' ? 'text-primary' : ''}`} />
+                </div>
+              </th>
+              <th className="p-4 font-semibold cursor-pointer select-none hover:text-primary transition-colors" onClick={() => handleSort('stock_quantity')}>
+                <div className="flex items-center gap-1">
+                  Stock
+                  <ArrowUpDown size={12} className={`opacity-60 ${sortField === 'stock_quantity' ? 'text-primary' : ''}`} />
+                </div>
+              </th>
+              <th className="p-4 font-semibold cursor-pointer select-none hover:text-primary transition-colors" onClick={() => handleSort('is_active')}>
+                <div className="flex items-center gap-1">
+                  Status
+                  <ArrowUpDown size={12} className={`opacity-60 ${sortField === 'is_active' ? 'text-primary' : ''}`} />
+                </div>
+              </th>
               <th className="p-4 font-semibold text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {products.map(p => (
+            {currentProducts.map(p => (
               <tr key={p.id} className="hover:bg-surface/50 transition-colors">
                 <td className="p-4 font-medium">{p.name}</td>
                 <td className="p-4">KES {p.price}</td>
@@ -283,7 +392,7 @@ export default function AdminProducts() {
                 </td>
               </tr>
             ))}
-            {products.length === 0 && (
+            {currentProducts.length === 0 && (
               <tr>
                 <td colSpan={5} className="p-8 text-center text-muted">No products found.</td>
               </tr>
@@ -291,6 +400,73 @@ export default function AdminProducts() {
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Footer */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-4 py-3 bg-surface/10 rounded-xl border border-border/40 mt-4">
+          <div className="flex flex-1 justify-between sm:hidden">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="btn-pill-outline text-xs px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="btn-pill-outline text-xs px-3 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+          <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs text-muted">
+                Showing <span className="font-semibold text-foreground">{indexOfFirstProduct + 1}</span> to{' '}
+                <span className="font-semibold text-foreground">
+                  {Math.min(indexOfLastProduct, sortedProducts.length)}
+                </span>{' '}
+                of <span className="font-semibold text-foreground">{sortedProducts.length}</span> results
+              </p>
+            </div>
+            <div>
+              <nav className="inline-flex -space-x-px rounded-md shadow-sm gap-1" aria-label="Pagination">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="p-2 text-muted hover:text-foreground hover:bg-surface/50 disabled:opacity-40 disabled:cursor-not-allowed transition-all rounded-lg border border-border/40 cursor-pointer"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                {Array.from({ length: totalPages }).map((_, i) => {
+                  const pageNum = i + 1
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`px-3 py-1 text-xs rounded-lg border transition-all cursor-pointer font-semibold ${
+                        currentPage === pageNum
+                          ? 'bg-primary text-primary-foreground border-primary'
+                          : 'border-border/40 text-muted hover:text-foreground hover:bg-surface/50'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  )
+                })}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="p-2 text-muted hover:text-foreground hover:bg-surface/50 disabled:opacity-40 disabled:cursor-not-allowed transition-all rounded-lg border border-border/40 cursor-pointer"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </nav>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
