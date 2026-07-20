@@ -41,19 +41,21 @@ export async function apiFetch(path: string, options: RequestInit = {}) {
   })
   if (!res.ok) {
     const text = await res.text()
+    let err
     try {
-      const err = JSON.parse(text)
-      let message = err.message || 'Request failed'
-      if (Array.isArray(err.detail)) {
-        message = err.detail.map((e: any) => `${e.loc?.join('.')}: ${e.msg}`).join(', ')
-      } else if (err.detail) {
-        message = err.detail
-      }
-      throw new Error(message)
+      err = JSON.parse(text)
     } catch (e) {
       console.error(`API Error on ${path}: Received non-JSON response:`, text.substring(0, 500))
       throw new Error(`Server returned an invalid response (not JSON) for ${path}`)
     }
+    
+    let message = err.message || 'Request failed'
+    if (Array.isArray(err.detail)) {
+      message = err.detail.map((e: any) => `${e.loc?.join('.')}: ${e.msg}`).join(', ')
+    } else if (err.detail) {
+      message = err.detail
+    }
+    throw new Error(message)
   }
 
   const responseText = await res.text()

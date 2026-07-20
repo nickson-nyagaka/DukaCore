@@ -42,6 +42,10 @@
   --animate-skeleton: skeleton 1.5s ease-in-out infinite;
 }
 
+[data-sidebar-collapsed="true"] {
+  --admin-sidebar-w: 80px;
+}
+
 @keyframes slide-up {
   from { transform: translateY(16px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }

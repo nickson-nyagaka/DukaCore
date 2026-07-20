@@ -35,6 +35,11 @@ class ProductImage(models.Model):
     alt_text = models.CharField(max_length=255, blank=True)
     is_primary = models.BooleanField(default=False)
 
+def normalize_voucher_code(raw: str) -> str:
+    return raw.strip().upper()
+
+from django.conf import settings
+
 class Voucher(models.Model):
     code = models.CharField(max_length=32, unique=True)
     discount_type = models.CharField(choices=[("PERCENT","Percent"),("FIXED","Fixed"),("FREE_SHIPPING","Free Shipping")], max_length=20)
@@ -49,4 +54,29 @@ class Voucher(models.Model):
 
     def __str__(self):
         return f"{self.code} ({self.discount_type}: {self.value})"
+
+class WishlistItem(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='wishlist_items')
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='wishlisted_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [['user', 'product']]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.product.name}"
+
+class StockAlert(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='stock_alerts')
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='stock_alerts')
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+    is_notified = models.BooleanField(default=False)
+    notified_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        unique_together = [['product', 'user', 'is_active']]
+
+    def __str__(self):
+        return f"{self.user.username} - {self.product.name} (Active: {self.is_active})"
 

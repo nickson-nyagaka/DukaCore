@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { register } from '@/lib/auth'
 import { Eye, EyeOff, Mail, Lock, User, Phone } from 'lucide-react'
+import { validateEmail, validateKenyanPhone } from '@/lib/validation'
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -18,6 +19,14 @@ export default function RegisterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!validateEmail(form.email)) {
+      setError('Please provide a valid email address')
+      return
+    }
+    if (form.phone_number && !validateKenyanPhone(form.phone_number)) {
+      setError('Please provide a valid Kenyan phone number (starts with +254, 07, or 01, max 12 digits)')
+      return
+    }
     setLoading(true); setError('')
     try {
       await register(form)

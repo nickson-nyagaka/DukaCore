@@ -12,7 +12,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <AdminSidebar />
 
         {/* Main area: offset by sidebar width */}
-        <div style={{ marginLeft: 'var(--admin-sidebar-w)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="transition-all duration-300" style={{ marginLeft: 'var(--admin-sidebar-w)', minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
           {/* Fixed Topbar */}
           <AdminTopbar />
 

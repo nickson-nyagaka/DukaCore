@@ -132,6 +132,23 @@ def update_product(request, product_id: int, data: ProductUpdateSchema):
         
     product.save()
     
+    if product.stock_quantity > 0:
+        from django.utils import timezone
+        from .models import StockAlert
+        active_alerts = StockAlert.objects.filter(product=product, is_active=True)
+        count = active_alerts.count()
+        if count > 0:
+            active_alerts.update(
+                is_active=False,
+                is_notified=True,
+                notified_at=timezone.now()
+            )
+            AuditLog.log(
+                request.user, 
+                "product.stock_replenished", 
+                {"product_id": product.id, "product_name": product.name, "alerts_notified": count}
+            )
+            
     # Handle image updates if explicitly sent
     if image_urls is not None or image_url is not None:
         from .models import ProductImage
@@ -177,8 +194,15 @@ class VoucherCreateSchema(Schema):
     is_active: bool = True
 
 class VoucherUpdateSchema(Schema):
-    is_active: Optional[bool] = None
+    code: Optional[str] = None
+    discount_type: Optional[str] = None
+    value: Optional[float] = None
+    min_order_value: Optional[float] = None
     usage_limit_total: Optional[int] = None
+    usage_limit_per_customer: Optional[int] = None
+    valid_from: Optional[datetime] = None
+    valid_until: Optional[datetime] = None
+    is_active: Optional[bool] = None
 
 class VoucherOutSchema(Schema):
     id: int
@@ -198,7 +222,12 @@ def create_voucher(request, data: VoucherCreateSchema):
     if request.user.role != 'ADMIN':
         raise HttpError(403, "Only ADMIN can create vouchers")
         
-    voucher = Voucher.objects.create(**data.dict())
+    from .models import normalize_voucher_code
+    payload = data.dict()
+    payload['code'] = normalize_voucher_code(payload['code'])
+    voucher = Voucher.objects.create(**payload)
+    
+    AuditLog.log(request.user, "voucher.create", {"voucher_id": voucher.id, "code": voucher.code})
     return voucher
 
 @router.get("/vouchers", response=List[VoucherOutSchema])
@@ -214,11 +243,29 @@ def update_voucher(request, voucher_id: int, data: VoucherUpdateSchema):
         
     voucher = get_object_or_404(Voucher, id=voucher_id)
     
-    for attr, value in data.dict(exclude_unset=True).items():
+    from .models import normalize_voucher_code
+    update_data = data.dict(exclude_unset=True)
+    if 'code' in update_data:
+        update_data['code'] = normalize_voucher_code(update_data['code'])
+        
+    for attr, value in update_data.items():
         setattr(voucher, attr, value)
         
     voucher.save()
+    AuditLog.log(request.user, "voucher.update", {"voucher_id": voucher.id, "code": voucher.code})
     return voucher
+
+@router.delete("/vouchers/{voucher_id}")
+def delete_voucher(request, voucher_id: int):
+    if request.user.role != 'ADMIN':
+        raise HttpError(403, "Only ADMIN can delete vouchers")
+        
+    voucher = get_object_or_404(Voucher, id=voucher_id)
+    code = voucher.code
+    # Hard delete is safe because of voucher_code_snapshot on orders
+    voucher.delete()
+    AuditLog.log(request.user, "voucher.delete", {"voucher_id": voucher_id, "code": code})
+    return {"success": True}
 
 # --- Categories ---
 

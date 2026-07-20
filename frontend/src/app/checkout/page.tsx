@@ -6,9 +6,10 @@ import Link from 'next/link'
 import { Phone, MapPin, CreditCard, Smartphone, Loader2, CheckCircle, XCircle } from 'lucide-react'
 import { useCartStore } from '@/lib/cart-store'
 import { useAuth, apiFetch } from '@/lib/auth'
+import { validateKenyanPhone } from '@/lib/validation'
 
 type PaymentMethod = 'MOCK' | 'MPESA'
-type CheckoutStatus = 'form' | 'processing' | 'polling' | 'success' | 'failed'
+type CheckoutStatus = 'form' | 'processing' | 'awaiting_confirmation' | 'success' | 'failed' | 'timeout'
 
 export default function CheckoutPage() {
   const router = useRouter()
@@ -47,6 +48,11 @@ export default function CheckoutPage() {
       return
     }
 
+    if (!validateKenyanPhone(phone)) {
+      setError('Please provide a valid Kenyan phone number (starts with +254, 07, or 01, max 12 digits)')
+      return
+    }
+
     setError('')
     setStatus('processing')
 
@@ -60,10 +66,9 @@ export default function CheckoutPage() {
         }),
       })
 
-      if (paymentMethod === 'MPESA') {
-        setOrderId(data.order_group_id || data.id)
-        setStatus('polling')
-        startPolling(data.order_group_id || data.id)
+      if (data.checkout_request_id) {
+        setStatus('awaiting_confirmation')
+        startPolling(data.checkout_request_id)
       } else {
         setStatus('success')
         clearCart()
@@ -74,15 +79,23 @@ export default function CheckoutPage() {
     }
   }
 
-  const startPolling = (oid: number) => {
+  const startPolling = (checkoutRequestId: string) => {
+    let attempts = 0
     pollRef.current = setInterval(async () => {
+      attempts++
+      if (attempts > 30) { // 30 * 3s = 90 seconds timeout
+        clearInterval(pollRef.current!)
+        setStatus('timeout')
+        return
+      }
+
       try {
-        const data = await apiFetch(`/api/orders/${oid}/status`)
-        if (data.status === 'PAID' || data.status === 'PROCESSING') {
+        const data = await apiFetch(`/api/orders/payment/${checkoutRequestId}/status`)
+        if (data.status === 'PAID' || data.status === 'SUCCESS') {
           clearInterval(pollRef.current!)
           setStatus('success')
           clearCart()
-        } else if (data.status === 'FAILED' || data.status === 'CANCELLED') {
+        } else if (data.status === 'FAILED') {
           clearInterval(pollRef.current!)
           setStatus('failed')
         }
@@ -124,7 +137,7 @@ export default function CheckoutPage() {
             Payment Failed
           </h1>
           <p className="text-sm text-muted dark:text-muted-dark mt-2">
-            The M-Pesa payment was not completed. Your order has been cancelled.
+            The M-Pesa payment was not completed due to insufficient funds or cancellation. Your order has been cancelled.
           </p>
           <button onClick={() => setStatus('form')} className="btn-pill-primary mt-6 inline-flex">Try Again</button>
         </div>
@@ -132,8 +145,28 @@ export default function CheckoutPage() {
     )
   }
 
-  // ── Polling State (M-Pesa waiting) ──
-  if (status === 'polling') {
+  // ── Timeout State ──
+  if (status === 'timeout') {
+    return (
+      <div className="max-w-md mx-auto px-4 py-20 text-center">
+        <div className="glass rounded-3xl p-10">
+          <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-warning/10 flex items-center justify-center">
+            <Loader2 size={32} className="text-warning animate-spin" />
+          </div>
+          <h1 className="text-2xl font-bold text-foreground dark:text-foreground-dark" style={{ fontFamily: 'var(--font-heading)' }}>
+            Payment Taking Too Long
+          </h1>
+          <p className="text-sm text-muted dark:text-muted-dark mt-2">
+            We haven&apos;t received confirmation from Safaricom yet. Please check your order status later.
+          </p>
+          <Link href="/" className="btn-pill-primary mt-6 inline-flex">Back to Home</Link>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Awaiting Confirmation State (M-Pesa waiting) ──
+  if (status === 'awaiting_confirmation') {
     return (
       <div className="max-w-md mx-auto px-4 py-20 text-center">
         <div className="glass rounded-3xl p-10">
@@ -141,11 +174,11 @@ export default function CheckoutPage() {
             <Smartphone size={28} className="text-primary" />
           </div>
           <h1 className="text-xl font-bold text-foreground dark:text-foreground-dark" style={{ fontFamily: 'var(--font-heading)' }}>
-            Waiting for M-Pesa...
+            Waiting for Confirmation...
           </h1>
           <p className="text-sm text-muted dark:text-muted-dark mt-2">
-            An STK Push has been sent to <strong className="text-foreground dark:text-foreground-dark">{phone}</strong>. 
-            Please check your phone and enter your M-Pesa PIN.
+            A payment request has been sent to <strong className="text-foreground dark:text-foreground-dark">{phone}</strong>. 
+            Please check your phone and enter your PIN.
           </p>
           <div className="flex items-center justify-center gap-2 mt-6 text-xs text-muted">
             <Loader2 size={14} className="animate-spin" />

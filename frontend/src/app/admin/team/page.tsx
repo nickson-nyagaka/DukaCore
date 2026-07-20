@@ -5,6 +5,7 @@ import { apiFetch } from '@/lib/auth'
 import DataTable from '@/components/admin/DataTable'
 import ModalAlert from '@/components/admin/ModalAlert'
 import { Plus, Trash2, Edit2, X, AlertTriangle } from 'lucide-react'
+import { validateEmail, validateKenyanPhone } from '@/lib/validation'
 
 export default function UserManagement() {
   const [users, setUsers] = useState<any[]>([])
@@ -24,13 +25,15 @@ export default function UserManagement() {
     last_name: '',
     phone_number: '',
     role: 'STAFF',
-    password: ''
+    password: '',
+    confirmPassword: ''
   })
   const [submittingAdd, setSubmittingAdd] = useState(false)
 
   // Edit Modal state
   const [showEditModal, setShowEditModal] = useState(false)
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
+  const [showEditPassword, setShowEditPassword] = useState(false)
   const [editForm, setEditForm] = useState({
     username: '',
     email: '',
@@ -38,7 +41,8 @@ export default function UserManagement() {
     last_name: '',
     phone_number: '',
     role: 'STAFF',
-    password: ''
+    password: '',
+    confirmPassword: ''
   })
   const [submittingEdit, setSubmittingEdit] = useState(false)
 
@@ -65,12 +69,25 @@ export default function UserManagement() {
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!validateEmail(addForm.email)) {
+      setModalAlert({ message: 'Please provide a valid email address', type: 'error' })
+      return
+    }
+    if (addForm.phone_number && !validateKenyanPhone(addForm.phone_number)) {
+      setModalAlert({ message: 'Please provide a valid Kenyan phone number (starts with +254, 07, or 01, max 12 digits)', type: 'error' })
+      return
+    }
+    if (addForm.password !== addForm.confirmPassword) {
+      setModalAlert({ message: 'Passwords do not match', type: 'error' })
+      return
+    }
     setSubmittingAdd(true)
     setModalAlert(null)
     try {
+      const { confirmPassword, ...payload } = addForm
       await apiFetch('/api/admin/team/add', {
         method: 'POST',
-        body: JSON.stringify(addForm)
+        body: JSON.stringify(payload)
       })
       setToast({ message: 'User created successfully!', type: 'success' })
       setAddForm({
@@ -80,7 +97,8 @@ export default function UserManagement() {
         last_name: '',
         phone_number: '',
         role: 'STAFF',
-        password: ''
+        password: '',
+        confirmPassword: ''
       })
       fetchUsers()
       setShowAddModal(false)
@@ -98,6 +116,7 @@ export default function UserManagement() {
   const handleEditUserClick = (u: any) => {
     setModalAlert(null)
     setSelectedUserId(u.id)
+    setShowEditPassword(false)
     setEditForm({
       username: u.username || '',
       email: u.email || '',
@@ -105,7 +124,8 @@ export default function UserManagement() {
       last_name: u.last_name || '',
       phone_number: u.phone_number || '',
       role: u.role || 'STAFF',
-      password: '' // Keep empty unless updating password
+      password: '', // Keep empty unless updating password
+      confirmPassword: ''
     })
     setShowEditModal(true)
   }
@@ -113,12 +133,34 @@ export default function UserManagement() {
   const handleEditUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedUserId) return
+
+    if (!validateEmail(editForm.email)) {
+      setModalAlert({ message: 'Please provide a valid email address', type: 'error' })
+      return
+    }
+    if (editForm.phone_number && !validateKenyanPhone(editForm.phone_number)) {
+      setModalAlert({ message: 'Please provide a valid Kenyan phone number (starts with +254, 07, or 01, max 12 digits)', type: 'error' })
+      return
+    }
+
+    if (showEditPassword) {
+      if (!editForm.password) {
+        setModalAlert({ message: 'Password cannot be empty', type: 'error' })
+        return
+      }
+      if (editForm.password !== editForm.confirmPassword) {
+        setModalAlert({ message: 'Passwords do not match', type: 'error' })
+        return
+      }
+    }
+
     setSubmittingEdit(true)
     setModalAlert(null)
 
-    // Only send password if it's filled
+    // Only send password if it's filled and toggled
     const payload: any = { ...editForm }
-    if (!payload.password) {
+    delete payload.confirmPassword
+    if (!showEditPassword || !payload.password) {
       delete payload.password
     }
 
@@ -327,16 +369,22 @@ export default function UserManagement() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-muted mb-1">Password</label>
-                <input type="password" required className="input-field" value={addForm.password} onChange={e => setAddForm({...addForm, password: e.target.value})} />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-muted mb-1">Password</label>
+                  <input type="password" required className="input-field" value={addForm.password} onChange={e => setAddForm({...addForm, password: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-muted mb-1">Confirm Password</label>
+                  <input type="password" required className="input-field" value={addForm.confirmPassword} onChange={e => setAddForm({...addForm, confirmPassword: e.target.value})} />
+                </div>
               </div>
 
               <div className="pt-4 flex gap-3">
                 <button type="button" onClick={() => setShowAddModal(false)} className="btn-secondary flex-1 justify-center">
                   Cancel
                 </button>
-                <button type="submit" disabled={submittingAdd} className="btn-primary flex-1 justify-center">
+                <button type="submit" disabled={submittingAdd} className="btn-primary bg-success hover:bg-success/90 border-none flex-1 justify-center">
                   {submittingAdd ? 'Adding...' : 'Add User'}
                 </button>
               </div>
@@ -429,16 +477,63 @@ export default function UserManagement() {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-semibold text-muted mb-1">Password <span className="text-xs text-muted font-normal">(Leave blank to keep current)</span></label>
-                <input type="password" className="input-field" placeholder="••••••••" value={editForm.password} onChange={e => setEditForm({...editForm, password: e.target.value})} />
+              <div className="pt-2">
+                {!showEditPassword ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowEditPassword(true)}
+                    className="text-xs text-primary font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    🔐 Change Password?
+                  </button>
+                ) : (
+                  <div className="space-y-4 p-4 rounded-xl bg-surface border border-border">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-xs font-bold uppercase tracking-wider text-muted">Change Password</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowEditPassword(false)
+                          setEditForm({ ...editForm, password: '', confirmPassword: '' })
+                        }}
+                        className="text-xs text-danger hover:underline cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-muted mb-1">New Password</label>
+                        <input
+                          type="password"
+                          required
+                          className="input-field"
+                          placeholder="New Password"
+                          value={editForm.password}
+                          onChange={e => setEditForm({ ...editForm, password: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-muted mb-1">Confirm Password</label>
+                        <input
+                          type="password"
+                          required
+                          className="input-field"
+                          placeholder="Confirm Password"
+                          value={editForm.confirmPassword}
+                          onChange={e => setEditForm({ ...editForm, confirmPassword: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="pt-4 flex gap-3">
                 <button type="button" onClick={() => { setShowEditModal(false); setSelectedUserId(null) }} className="btn-secondary flex-1 justify-center">
                   Cancel
                 </button>
-                <button type="submit" disabled={submittingEdit} className="btn-primary flex-1 justify-center">
+                <button type="submit" disabled={submittingEdit} className="btn-primary bg-success hover:bg-success/90 border-none flex-1 justify-center">
                   {submittingEdit ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>

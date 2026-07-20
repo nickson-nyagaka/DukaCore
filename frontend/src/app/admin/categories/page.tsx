@@ -272,7 +272,7 @@ export default function AdminCategoriesPage() {
                 <button type="button" onClick={() => setShowAddModal(false)} className="btn-secondary flex-1 justify-center">
                   Cancel
                 </button>
-                <button type="submit" disabled={submittingAdd} className="btn-primary flex-1 justify-center">
+                <button type="submit" disabled={submittingAdd} className="btn-primary bg-success hover:bg-success/90 border-none flex-1 justify-center">
                   {submittingAdd ? 'Saving...' : 'Save'}
                 </button>
               </div>
@@ -343,7 +343,7 @@ export default function AdminCategoriesPage() {
                 <button type="button" onClick={() => { setShowEditModal(false); setSelectedCategoryId(null) }} className="btn-secondary flex-1 justify-center">
                   Cancel
                 </button>
-                <button type="submit" disabled={submittingEdit} className="btn-primary flex-1 justify-center">
+                <button type="submit" disabled={submittingEdit} className="btn-primary bg-success hover:bg-success/90 border-none flex-1 justify-center">
                   {submittingEdit ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>

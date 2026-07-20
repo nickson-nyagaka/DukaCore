@@ -589,7 +589,7 @@ export default function AdminProducts() {
                 <button type="button" onClick={() => setShowModal(false)} className="btn-secondary flex-1 justify-center">
                   Cancel
                 </button>
-                <button type="submit" disabled={submitting} className="btn-primary flex-1 justify-center">
+                <button type="submit" disabled={submitting} className="btn-primary bg-success hover:bg-success/90 border-none flex-1 justify-center">
                   {submitting ? 'Uploading & Adding...' : 'Add Product'}
                 </button>
               </div>
@@ -719,7 +719,7 @@ export default function AdminProducts() {
                 <button type="button" onClick={() => setShowEditModal(false)} className="btn-secondary flex-1 justify-center">
                   Cancel
                 </button>
-                <button type="submit" disabled={submittingEdit} className="btn-primary flex-1 justify-center">
+                <button type="submit" disabled={submittingEdit} className="btn-primary bg-success hover:bg-success/90 border-none flex-1 justify-center">
                   {submittingEdit ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>

@@ -13,12 +13,20 @@ class Order(models.Model):
     customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
     total_amount = models.DecimalField(max_digits=12, decimal_places=2)
     voucher = models.ForeignKey('catalog.Voucher', on_delete=models.SET_NULL, null=True, blank=True, related_name='orders')
+    voucher_code_snapshot = models.CharField(max_length=32, blank=True)
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return f"Order #{self.id} for {self.customer.email}"
+
+class OrderStatusHistory(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="status_history")
+    from_status = models.CharField(max_length=20)
+    to_status = models.CharField(max_length=20)
+    changed_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, blank=True)
+    changed_at = models.DateTimeField(auto_now_add=True)
 
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')

@@ -46,7 +46,7 @@ export default function AdminTopbar() {
 
   return (
     <header
-      className="fixed top-0 right-0 z-30 h-16 flex items-center justify-between px-6"
+      className="fixed top-0 right-0 z-30 h-16 flex items-center justify-between px-6 transition-all duration-300"
       style={{
         left: 'var(--admin-sidebar-w)',
         background: 'var(--navbar)',

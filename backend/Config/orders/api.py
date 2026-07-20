@@ -1,4 +1,5 @@
 from ninja import Router, Schema
+from typing import List, Optional
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.conf import settings
@@ -6,7 +7,7 @@ from ninja.errors import HttpError
 from auth_app.auth import JWTAuth
 from catalog.models import Product, Voucher
 from cart.api import get_cart
-from .models import Order, OrderItem, Payment
+from .models import Order, OrderItem, Payment, Review
 from users.models import AuditLog
 import datetime
 import base64
@@ -22,23 +23,27 @@ class CheckoutSchema(Schema):
     voucher_code: str = None
 
 class OrderItemOutSchema(Schema):
-    product_id: int
-    name: str
-    quantity: int
-    unit_price: float
-
-class OrderOutSchema(Schema):
     id: int
-    total_amount: float
-    status: str
-    items: list[OrderItemOutSchema]
+    product_id: int
+    product_name: str
+    product_slug: str
+    product_price: float
+    quantity: int
+    image_url: Optional[str] = None
+
 
 class CheckoutResponseSchema(Schema):
     order_id: int
     total_amount: float
     status: str
+    checkout_request_id: Optional[str] = None
 
-from typing import List, Optional
+class OrderStatusHistorySchema(Schema):
+    from_status: str
+    to_status: str
+    changed_at: datetime.datetime
+    changed_by_email: str
+
 
 class OrderListOutSchema(Schema):
     id: int
@@ -48,21 +53,55 @@ class OrderListOutSchema(Schema):
     customer_email: str
     vendor_id: Optional[int] = None
     vendor_subtotal: float
+    status_history: List[OrderStatusHistorySchema] = []
+    items: List[OrderItemOutSchema] = []
 
 class OrderStatusOutSchema(Schema):
     order_id: int
     status: str
 
 @router.get('', auth=JWTAuth(), response=List[OrderListOutSchema])
-def list_orders(request):
+def list_orders(request, q: Optional[str] = None):
     user = request.user
     if user.role in ['ADMIN', 'STAFF']:
-        qs = Order.objects.all().select_related('customer').order_by('-created_at')
+        qs = Order.objects.prefetch_related('status_history__changed_by', 'items__product__images').select_related('customer').order_by('-created_at')
     else:
-        qs = Order.objects.filter(customer=user).select_related('customer').order_by('-created_at')
+        qs = Order.objects.prefetch_related('status_history__changed_by', 'items__product__images').filter(customer=user).select_related('customer').order_by('-created_at')
+        
+    if q:
+        from django.db.models import Q
+        qs = qs.filter(Q(id__icontains=q) | Q(customer__email__icontains=q) | Q(status__icontains=q))
         
     result = []
     for o in qs:
+        history = [
+            OrderStatusHistorySchema(
+                from_status=h.from_status,
+                to_status=h.to_status,
+                changed_at=h.changed_at,
+                changed_by_email=h.changed_by.email if h.changed_by else "System"
+            ) for h in o.status_history.all()
+        ]
+        
+        items_out = []
+        for item in o.items.all():
+            prod = item.product
+            primary_img = None
+            if prod:
+                imgs = list(prod.images.all())
+                primary = next((i for i in imgs if i.is_primary), None) or (imgs[0] if imgs else None)
+                primary_img = primary.url if primary else None
+                
+            items_out.append(OrderItemOutSchema(
+                id=item.id,
+                product_id=prod.id if prod else 0,
+                product_name=prod.name if prod else "Deleted Product",
+                product_slug=prod.slug if prod else "",
+                product_price=float(item.unit_price),
+                quantity=item.quantity,
+                image_url=primary_img
+            ))
+            
         result.append(OrderListOutSchema(
             id=o.id,
             total_amount=float(o.total_amount),
@@ -70,7 +109,9 @@ def list_orders(request):
             created_at=o.created_at,
             customer_email=o.customer.email,
             vendor_id=None,
-            vendor_subtotal=float(o.total_amount)
+            vendor_subtotal=float(o.total_amount),
+            status_history=history,
+            items=items_out
         ))
     return result
 
@@ -85,6 +126,24 @@ def get_order_status(request, order_id: int):
         order_id=order.id,
         status=order.status
     )
+
+class PaymentStatusOutSchema(Schema):
+    status: str
+
+@router.get('/payment/{checkout_request_id}/status', auth=JWTAuth(), response=PaymentStatusOutSchema)
+def get_payment_status(request, checkout_request_id: str):
+    payment = get_object_or_404(Payment, checkout_request_id=checkout_request_id)
+    # Ensure the user asking owns the order
+    if request.user.role not in ['ADMIN', 'STAFF']:
+        if payment.order.customer_id != request.user.id:
+            raise HttpError(403, "Forbidden")
+            
+    # We map SUCCESS to PAID to match the frontend expectation if needed, or frontend can handle SUCCESS
+    frontend_status = payment.status
+    if frontend_status == 'SUCCESS':
+        frontend_status = 'PAID'
+        
+    return {"status": frontend_status}
 
 def get_mpesa_access_token():
     consumer_key = getattr(settings, 'MPESA_CONSUMER_KEY', 'default_sandbox_key')
@@ -229,6 +288,7 @@ def checkout(request, data: CheckoutSchema):
             total_amount=total_amount,
             discount_amount=discount_amount,
             voucher=applied_voucher,
+            voucher_code_snapshot=applied_voucher.code if applied_voucher else "",
             status='PENDING'
         )
 
@@ -249,12 +309,15 @@ def checkout(request, data: CheckoutSchema):
         )
 
         if data.payment_method == 'MPESA':
-            host = request.get_host()
-            callback_url = f"https://{host}/api/orders/payment/callback"
-            
-            stk_success = trigger_stk_push(payment, data.phone_number, total_amount, callback_url)
-            if not stk_success:
-                raise HttpError(500, "Failed to initiate M-Pesa payment request")
+            from payments.gateway import get_payment_gateway
+            try:
+                gateway = get_payment_gateway()
+                checkout_request_id = gateway.initiate_payment(order, data.phone_number)
+                payment.checkout_request_id = checkout_request_id
+                payment.save()
+            except Exception as e:
+                print(f"Gateway error: {e}")
+                raise HttpError(500, "Failed to initiate payment via gateway")
 
         try:
             import redis
@@ -269,31 +332,42 @@ def checkout(request, data: CheckoutSchema):
             order_id=order.id,
             total_amount=total_amount,
             status=order.status,
+            checkout_request_id=payment.checkout_request_id if data.payment_method == 'MPESA' else None
         )
 
-@router.post('/payment/callback')
-def mpesa_callback(request, data: dict):
-    body = data.get('Body', {})
-    stk_callback = body.get('stkCallback', {})
-    checkout_request_id = stk_callback.get('CheckoutRequestID')
-    result_code = stk_callback.get('ResultCode')
-    
-    if not checkout_request_id:
-        return {"ResultCode": 1, "ResultDesc": "Invalid payload"}
+class DarajaCallbackBodySchema(Schema):
+    MerchantRequestID: str = None
+    CheckoutRequestID: str
+    ResultCode: int
+    ResultDesc: str
+    CallbackMetadata: dict = None
 
+class DarajaCallbackDataSchema(Schema):
+    stkCallback: DarajaCallbackBodySchema
+
+class DarajaCallbackSchema(Schema):
+    Body: DarajaCallbackDataSchema
+
+def process_mpesa_callback(stk_callback) -> dict:
+    checkout_request_id = stk_callback.CheckoutRequestID
+    result_code = stk_callback.ResultCode
+    
+    from .services import transition_order_status
+    
     with transaction.atomic():
         try:
             payment = Payment.objects.select_for_update().get(checkout_request_id=checkout_request_id)
         except Payment.DoesNotExist:
             return {"ResultCode": 1, "ResultDesc": "Payment not found"}
 
-        if payment.status in ['SUCCESS', 'FAILED']:
-            return {"ResultCode": 0, "ResultDesc": "Already processed"}
+        # Idempotency
+        if payment.status != 'PENDING':
+            return {"status": "already_processed"}
 
         order = payment.order
 
         if result_code == 0:
-            metadata = stk_callback.get('CallbackMetadata', {}).get('Item', [])
+            metadata = stk_callback.CallbackMetadata.get('Item', []) if stk_callback.CallbackMetadata else []
             receipt_number = ""
             for item in metadata:
                 if item.get('Name') == 'MpesaReceiptNumber':
@@ -304,19 +378,93 @@ def mpesa_callback(request, data: dict):
             payment.mpesa_receipt_number = receipt_number
             payment.save()
 
-            order.status = 'PROCESSING'
-            order.save()
+            transition_order_status(order, 'PROCESSING', actor=None)
         else:
             payment.status = 'FAILED'
             payment.save()
 
-            order.status = 'CANCELLED'
-            order.save()
+            transition_order_status(order, 'CANCELLED', actor=None)
 
-            for item in order.items.all():
-                if item.product:
-                    product = Product.objects.select_for_update().get(id=item.product.id)
-                    product.stock_quantity += item.quantity
-                    product.save()
+    return {"status": "ok"}
 
-    return {"ResultCode": 0, "ResultDesc": "Success"}
+@router.post('/payment/callback')
+def mpesa_callback(request, payload: DarajaCallbackSchema):
+    return process_mpesa_callback(payload.Body.stkCallback)
+
+@router.post('/dev/payments/{checkout_request_id}/force-outcome')
+def force_mock_outcome(request, checkout_request_id: str, outcome: str):
+    """Lets you manually trigger SUCCESS/INSUFFICIENT_FUNDS/CANCELLED on demand while testing."""
+    if settings.PAYMENT_GATEWAY_MODE != "mock":
+        from django.http import Http404
+        raise Http404()
+        
+    from payments.tasks import build_daraja_style_payload
+    payload = build_daraja_style_payload(checkout_request_id, outcome)
+    
+    # We call our own endpoint function directly with the schema
+    # But since it expects DarajaCallbackSchema (a Ninja Schema), we construct it or pass dict if Ninja allows unpacking
+    schema_instance = DarajaCallbackSchema.parse_obj(payload)
+    return process_mpesa_callback(schema_instance.Body.stkCallback)
+
+class OrderStatusUpdateSchema(Schema):
+    status: str
+
+@router.patch('/admin/orders/{order_id}/status', auth=JWTAuth(), response=OrderStatusOutSchema)
+def update_order_status(request, order_id: int, data: OrderStatusUpdateSchema):
+    if request.user.role not in ['ADMIN', 'STAFF']:
+        raise HttpError(403, "Forbidden")
+        
+    order = get_object_or_404(Order, id=order_id)
+    
+    from .services import transition_order_status
+    transition_order_status(order, data.status, request.user)
+    
+    AuditLog.log(request.user, "order.update_status", {"order_id": order.id, "new_status": order.status})
+    
+    return OrderStatusOutSchema(
+        order_id=order.id,
+        status=order.status
+    )
+
+@router.post('/admin/orders/{order_id}/refund', auth=JWTAuth())
+def process_order_refund(request, order_id: int):
+    if request.user.role not in ['ADMIN', 'STAFF']:
+        raise HttpError(403, "Forbidden")
+    # TODO: Implement actual payment gateway refund logic
+    raise HttpError(501, "Not Implemented: Refunds are not yet supported via the API.")
+
+class ReviewInputSchema(Schema):
+    product_id: int
+    rating: int
+    comment: str
+
+@router.post('/reviews', auth=JWTAuth())
+def submit_product_review(request, data: ReviewInputSchema):
+    user = request.user
+    product = get_object_or_404(Product, id=data.product_id)
+    
+    if not (1 <= data.rating <= 5):
+        raise HttpError(400, "Rating must be between 1 and 5")
+        
+    order_item = OrderItem.objects.filter(
+        order__customer=user,
+        order__status__in=['SHIPPED', 'DELIVERED'],
+        product=product
+    ).first()
+    
+    if not order_item:
+        raise HttpError(400, "You can only review products from shipped or delivered orders you purchased.")
+        
+    review, created = Review.objects.update_or_create(
+        product=product,
+        customer=user,
+        defaults={
+            'order_item': order_item,
+            'rating': data.rating,
+            'comment': data.comment.strip()
+        }
+    )
+    
+    AuditLog.log(user, "product.review", {"product_id": product.id, "rating": data.rating})
+    return {"status": "saved", "review_id": review.id}
+

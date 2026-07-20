@@ -13,6 +13,16 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
+# -------------------------------------------------------------------
+# Payments Gateway Config
+# -------------------------------------------------------------------
+PAYMENT_GATEWAY_MODE = os.environ.get("PAYMENT_GATEWAY_MODE", "mock")  # "mock" | "daraja"
+
+# Fail loudly at startup rather than silently letting mock mode reach production
+if not DEBUG and PAYMENT_GATEWAY_MODE == "mock":
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured("Mock payment gateway cannot be active outside DEBUG mode.")
+
 # Domain config
 COOKIE_DOMAIN = os.environ.get('COOKIE_DOMAIN') # e.g. .client-domain.com
 
