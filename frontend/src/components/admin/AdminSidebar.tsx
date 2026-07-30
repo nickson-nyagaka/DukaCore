@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useState, useEffect } from 'react'
 import { 
   LayoutDashboard, Users, Ticket, ShieldAlert, 
-  Box, ListOrdered, Store, Tags, Menu
+  Box, ListOrdered, Store, Tags, Menu, Settings
 } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 
@@ -17,6 +17,7 @@ const navItems = [
   { href: '/admin/team', label: 'User Management', icon: Users, permission: 'user.manage', exact: false },
   { href: '/admin/vouchers', label: 'Vouchers', icon: Ticket, permission: 'voucher.create', exact: false },
   { href: '/admin/security/access-log', label: 'Access Log', icon: ShieldAlert, permission: 'user.manage', exact: false },
+  { href: '/admin/settings', label: 'Settings', icon: Settings, permission: null, exact: false },
 ]
 
 export default function AdminSidebar() {

@@ -103,7 +103,7 @@ export default function Navbar() {
                       className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-foreground hover:bg-primary-light hover:text-primary transition-colors">
                       <User size={16} /> My Account
                     </Link>
-                    <Link href="/orders" prefetch={true} onClick={() => setUserMenuOpen(false)}
+                    <Link href="/account" prefetch={true} onClick={() => setUserMenuOpen(false)}
                       className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-foreground hover:bg-primary-light hover:text-primary transition-colors">
                       <Package size={16} /> My Orders
                     </Link>

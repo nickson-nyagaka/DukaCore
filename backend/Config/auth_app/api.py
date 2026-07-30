@@ -98,15 +98,22 @@ def register(request, data: RegisterSchema):
 def login(request, data: LoginSchema):
     from django.contrib.auth import authenticate
     from ninja.errors import HttpError
-    user = authenticate(request, username=data.identifier, password=data.password)
-    if not user:
+    
+    identifier = (data.identifier or '').strip()
+    user = None
+
+    if '@' in identifier:
         try:
-            # Try by email if username auth failed
-            u = User.objects.get(email=data.identifier)
-            if not u.check_password(data.password):
+            u = User.objects.get(email__iexact=identifier)
+            if u.check_password(data.password):
+                user = u
+            else:
                 raise HttpError(401, 'Invalid credentials')
-            user = u
         except User.DoesNotExist:
+            raise HttpError(401, 'Invalid credentials')
+    else:
+        user = authenticate(request, username=identifier, password=data.password)
+        if not user:
             raise HttpError(401, 'Invalid credentials')
 
     if not user.is_active:

@@ -400,7 +400,7 @@ export default function UserManagement() {
             <div className="flex items-center justify-center w-12 h-12 rounded-full bg-danger/10 text-danger mb-4 mx-auto">
               <AlertTriangle size={24} />
             </div>
-            <h3 className="font-bold text-xl mb-2 font-heading text-center">Delete User?</h3>
+            <h3 className="font-bold text-xl mb-2 font-heading text-center text-danger">Delete User?</h3>
             <ModalAlert message={modalAlert?.message || null} type={modalAlert?.type || null} onClose={() => setModalAlert(null)} />
             <p className="text-muted text-center text-sm mb-6">
               This action cannot be undone. This will permanently delete the user account and remove their data from our servers.
@@ -418,7 +418,7 @@ export default function UserManagement() {
                 type="button" 
                 onClick={handleDeactivateConfirm}
                 disabled={submittingDelete} 
-                className="btn-primary flex-1 justify-center bg-danger hover:bg-danger/90 text-white border-none"
+                className="btn-danger flex-1 justify-center"
               >
                 {submittingDelete ? 'Deleting...' : 'Yes, Delete'}
               </button>

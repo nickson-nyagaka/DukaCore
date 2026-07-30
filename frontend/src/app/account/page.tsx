@@ -23,6 +23,7 @@ import {
   Loader2
 } from 'lucide-react'
 import Link from 'next/link'
+import LoginPromptModal from '@/components/LoginPromptModal'
 
 type OrderStatus = 'PENDING' | 'PROCESSING' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED'
 
@@ -36,12 +37,18 @@ interface OrderItem {
   image_url: string
 }
 
+const formatPrice = (val: any) => {
+  const num = typeof val === 'number' ? val : parseFloat(val)
+  return isNaN(num) ? '0.00' : num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 interface Order {
   id: number
   created_at: string
   status: OrderStatus
-  shipping_address: string
-  total_price: number
+  shipping_address?: string
+  total_amount?: number
+  total_price?: number
   items: OrderItem[]
   status_history: {
     id: number
@@ -86,6 +93,18 @@ export default function AccountPage() {
   const [submittingReview, setSubmittingReview] = useState(false)
   const [reviewError, setReviewError] = useState('')
   const [reviewSuccess, setReviewSuccess] = useState('')
+
+  // Toast / Fade-out modal state
+  const [cartSuccessNotice, setCartSuccessNotice] = useState<{ message: string; visible: boolean } | null>(null)
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false)
+
+  const triggerCartSuccessNotice = (msg: string) => {
+    setCartSuccessNotice({ message: msg, visible: true })
+    setTimeout(() => {
+      setCartSuccessNotice(prev => prev ? { ...prev, visible: false } : null)
+      setTimeout(() => setCartSuccessNotice(null), 350)
+    }, 2800)
+  }
 
   // Loading states
   const [loadingOrders, setLoadingOrders] = useState(false)
@@ -149,10 +168,16 @@ export default function AccountPage() {
   }
 
   const handleAddWishlistToCart = async (item: WishlistItem) => {
+    if (!user) {
+      setShowLoginPrompt(true)
+      return
+    }
+    // 1. Add to Cart (with fallback if server/network fails)
     try {
-      if (user) {
+      try {
         await addItem(item.id, 1)
-      } else {
+      } catch (serverErr) {
+        console.warn('addItem API call failed, falling back to localAddItem:', serverErr)
         localAddItem({
           product_id: item.id,
           quantity: 1,
@@ -162,7 +187,20 @@ export default function AccountPage() {
           slug: item.slug
         })
       }
-      alert('🛒 Item added to your cart!')
+
+      // 2. Remove item from local wishlist state & server
+      setWishlist(prev => prev.filter(w => w.id !== item.id))
+      try {
+        await apiFetch('/api/catalog/wishlist/toggle', {
+          method: 'POST',
+          body: JSON.stringify({ product_id: item.id })
+        })
+      } catch (e) {
+        console.error('Failed to remove item from wishlist backend', e)
+      }
+
+      // 3. Show smooth fade-out success modal notification
+      triggerCartSuccessNotice(`"${item.name}" added to cart & removed from wishlist!`)
     } catch (e) {
       console.error('Failed to add wishlist item to cart', e)
     }
@@ -388,7 +426,7 @@ export default function AccountPage() {
                           <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
                             <div>
                               <span className="text-xs text-muted block md:text-right">Total Price</span>
-                              <span className="text-sm font-black text-primary">KES {Number(order.total_price).toLocaleString()}</span>
+                              <span className="text-sm font-black text-primary">KES {formatPrice(order.total_amount ?? order.total_price)}</span>
                             </div>
                             <ChevronRight size={18} className="text-muted hidden md:block" />
                           </div>
@@ -480,7 +518,7 @@ export default function AccountPage() {
                             <Link href={`/products/${item.product_slug}`} className="text-sm font-bold hover:underline block truncate text-foreground">
                               {item.product_name}
                             </Link>
-                            <span className="text-xs text-muted block mt-0.5">Quantity: {item.quantity} • Price: KES {Number(item.product_price).toLocaleString()}</span>
+                            <span className="text-xs text-muted block mt-0.5">Quantity: {item.quantity} • Price: KES {formatPrice(item.product_price)}</span>
                           </div>
 
                           {/* Write Review Button - only for Shipped or Delivered orders */}
@@ -502,10 +540,10 @@ export default function AccountPage() {
                   <div>
                     <h3 className="text-sm font-bold text-muted uppercase tracking-wider mb-4">Status Log</h3>
                     <div className="flex flex-col gap-3">
-                      {selectedOrder.status_history.map(history => (
-                        <div key={history.id} className="flex gap-4 text-xs">
+                      {selectedOrder.status_history.map((history, idx) => (
+                        <div key={`${idx}-${history.changed_at}`} className="flex gap-4 text-xs">
                           <span className="text-muted w-24 shrink-0 font-medium">{new Date(history.changed_at).toLocaleDateString()}</span>
-                          <span className="font-extrabold text-foreground">{history.status}</span>
+                          <span className="font-extrabold text-foreground">{history.to_status}</span>
                           <span className="text-muted italic">({history.changed_by_email})</span>
                         </div>
                       ))}
@@ -728,6 +766,19 @@ export default function AccountPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      <LoginPromptModal isOpen={showLoginPrompt} onClose={() => setShowLoginPrompt(false)} />
+
+      {/* Success Fade-out Modal Toast */}
+      {cartSuccessNotice && (
+        <div className={`fixed top-6 left-1/2 -translate-x-1/2 z-50 transition-all duration-300 transform ${
+          cartSuccessNotice.visible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-4 scale-95 pointer-events-none'
+        }`}>
+          <div className="bg-success text-white px-6 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-white/20 backdrop-blur-md">
+            <CheckCircle2 size={20} className="shrink-0" />
+            <span className="text-sm font-extrabold">{cartSuccessNotice.message}</span>
           </div>
         </div>
       )}

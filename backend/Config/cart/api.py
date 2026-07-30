@@ -60,7 +60,11 @@ def enrich_cart(cart: dict) -> CartSchema:
         try:
             product = Product.objects.get(id=item['product_id'])
             primary = product.images.filter(is_primary=True).first()
-            unit_price = float(product.price)
+            
+            from django.utils import timezone
+            is_flash_sale = product.discount_price and product.flash_sale_end_date and product.flash_sale_end_date > timezone.now()
+            unit_price = float(product.discount_price) if is_flash_sale else float(product.price)
+            
             enriched_items.append(CartItemSchema(
                 product_id=product.id,
                 quantity=item['quantity'],

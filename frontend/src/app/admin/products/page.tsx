@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { apiFetch } from '@/lib/auth'
 import { Plus, Edit2, Trash2, X, Image as ImageIcon, AlertTriangle, Search, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import ModalAlert from '@/components/admin/ModalAlert'
+import RichTextEditor from '@/components/RichTextEditor'
 
 export default function AdminProducts() {
   const [products, setProducts] = useState<any[]>([])
@@ -19,15 +20,15 @@ export default function AdminProducts() {
     price: '',
     stock_quantity: '',
     category_id: '',
+    is_active: true,
+    discount_price: '',
+    flash_sale_end_date: '',
   })
   const [categories, setCategories] = useState<any[]>([])
   const [imageFiles, setImageFiles] = useState<File[]>([])
   const [linkAddresses, setLinkAddresses] = useState<string[]>([])
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
-
-
-
-  // Edit Modal State
+  const [attributes, setAttributes] = useState<{name: string, type: string, value: string}[]>([])  // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false)
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState({
@@ -36,10 +37,33 @@ export default function AdminProducts() {
     price: '',
     stock_quantity: '',
     category_id: '',
+    is_active: true,
+    discount_price: '',
+    flash_sale_end_date: '',
   })
   const [editImageFiles, setEditImageFiles] = useState<File[]>([])
   const [editLinkAddresses, setEditLinkAddresses] = useState<string[]>([])
   const [submittingEdit, setSubmittingEdit] = useState(false)
+  const [editAttributes, setEditAttributes] = useState<{name: string, type: string, value: string}[]>([])
+
+  // Quick toggle active status directly from table row
+  const handleToggleActive = async (product: any) => {
+    try {
+      const updatedStatus = !product.is_active
+      await apiFetch(`/api/admin/products/${product.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ is_active: updatedStatus })
+      })
+      setToast({
+        message: `Product "${product.name}" is now ${updatedStatus ? 'Active' : 'Inactive'}`,
+        type: 'success'
+      })
+      fetchProducts()
+      setTimeout(() => setToast(null), 4000)
+    } catch (err: any) {
+      setToast({ message: err.message || 'Failed to update product status', type: 'error' })
+    }
+  }
 
   // Delete Modal State
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -137,9 +161,13 @@ export default function AdminProducts() {
       price: String(p.price) || '',
       stock_quantity: String(p.stock_quantity) || '',
       category_id: p.category_id ? String(p.category_id) : '',
+      is_active: p.is_active !== undefined ? Boolean(p.is_active) : true,
+      discount_price: p.discount_price ? String(p.discount_price) : '',
+      flash_sale_end_date: p.flash_sale_end_date ? new Date(p.flash_sale_end_date).toISOString().slice(0, 16) : '',
     })
     setEditImageFiles([])
     setEditLinkAddresses(p.image_urls || [])
+    setEditAttributes(p.attributes || [])
     setShowEditModal(true)
   }
 
@@ -183,7 +211,11 @@ export default function AdminProducts() {
           price: parseFloat(editForm.price),
           stock_quantity: parseInt(editForm.stock_quantity),
           category_id: editForm.category_id ? parseInt(editForm.category_id) : null,
-          image_urls: urls
+          image_urls: urls,
+          is_active: editForm.is_active,
+          attributes: editAttributes,
+          discount_price: editForm.discount_price ? parseFloat(editForm.discount_price) : null,
+          flash_sale_end_date: editForm.flash_sale_end_date ? new Date(editForm.flash_sale_end_date).toISOString() : null,
         })
       })
 
@@ -270,14 +302,18 @@ export default function AdminProducts() {
           stock_quantity: parseInt(form.stock_quantity),
           category_id: form.category_id ? parseInt(form.category_id) : null,
           image_urls: urls,
-          is_active: true
+          is_active: form.is_active,
+          attributes: attributes,
+          discount_price: form.discount_price ? parseFloat(form.discount_price) : null,
+          flash_sale_end_date: form.flash_sale_end_date ? new Date(form.flash_sale_end_date).toISOString() : null,
         })
       })
 
       setToast({ message: 'Product created successfully!', type: 'success' })
-      setForm({ name: '', description: '', price: '', stock_quantity: '', category_id: '' })
+      setForm({ name: '', description: '', price: '', stock_quantity: '', category_id: '', is_active: true, discount_price: '', flash_sale_end_date: '' })
       setImageFiles([])
       setLinkAddresses([])
+      setAttributes([])
       fetchProducts()
       setShowModal(false)
       setModalAlert(null)
@@ -378,9 +414,18 @@ export default function AdminProducts() {
                 <td className="p-4">KES {p.price}</td>
                 <td className="p-4">{p.stock_quantity}</td>
                 <td className="p-4">
-                  <span className={`px-2 py-1 rounded-full text-xs font-bold ${p.is_active ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
+                  <button
+                    onClick={() => handleToggleActive(p)}
+                    title={`Click to set ${p.is_active ? 'Inactive' : 'Active'}`}
+                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                      p.is_active 
+                        ? 'bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500/20' 
+                        : 'bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${p.is_active ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
                     {p.is_active ? 'Active' : 'Inactive'}
-                  </span>
+                  </button>
                 </td>
                 <td className="p-4 text-right">
                   <button onClick={() => handleEditClick(p)} className="p-2 text-muted hover:text-primary transition-colors cursor-pointer">
@@ -585,6 +630,121 @@ export default function AdminProducts() {
                 </div>
               </div>
 
+              {/* Flash Sales Section */}
+              <div className="grid grid-cols-2 gap-4 p-4 border border-primary/20 bg-primary/5 rounded-xl">
+                <div>
+                  <label className="block text-sm font-semibold text-primary mb-1">Flash Sale Price (KES)</label>
+                  <input type="number" step="0.01" placeholder="Optional" className="input-field border-primary/30 focus:border-primary" value={form.discount_price} onChange={e => setForm({...form, discount_price: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-primary mb-1">Flash Sale End Date & Time</label>
+                  <input type="datetime-local" className="input-field border-primary/30 focus:border-primary" value={form.flash_sale_end_date} onChange={e => setForm({...form, flash_sale_end_date: e.target.value})} />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-muted mb-1">Initial Status</label>
+                <select 
+                  className="input-field font-semibold"
+                  value={form.is_active ? 'true' : 'false'}
+                  onChange={e => setForm({...form, is_active: e.target.value === 'true'})}
+                >
+                  <option value="true">🟢 Active (Visible in Store)</option>
+                  <option value="false">🔴 Inactive (Hidden from Store)</option>
+                </select>
+              </div>
+
+              {/* Dynamic Attributes Section */}
+              <div className="border-t border-border/40 pt-4 mt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <label className="block text-sm font-bold text-foreground">Dynamic Fields (Optional)</label>
+                  <button 
+                    type="button" 
+                    onClick={() => setAttributes([...attributes, { name: '', type: 'text', value: '' }])}
+                    className="text-xs flex items-center gap-1 bg-primary/10 text-primary hover:bg-primary/20 px-2 py-1 rounded-md transition-colors"
+                  >
+                    <Plus size={14} /> Add Field
+                  </button>
+                </div>
+                
+                <div className="space-y-4">
+                  {attributes.map((attr, idx) => (
+                    <div key={idx} className="p-3 bg-surface/30 border border-border rounded-xl space-y-3 relative">
+                      <button 
+                        type="button" 
+                        onClick={() => setAttributes(attributes.filter((_, i) => i !== idx))}
+                        className="absolute top-2 right-2 text-muted hover:text-danger p-1 bg-background rounded-full transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                      
+                      <div className="grid grid-cols-2 gap-3 pr-6">
+                        <div>
+                          <label className="block text-xs font-semibold text-muted mb-1">Field Name (e.g. Specifications)</label>
+                          <input 
+                            type="text" 
+                            className="input-field text-sm" 
+                            value={attr.name} 
+                            placeholder="Field Name"
+                            onChange={e => {
+                              const newAttrs = [...attributes]
+                              newAttrs[idx].name = e.target.value
+                              setAttributes(newAttrs)
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-muted mb-1">Field Type</label>
+                          <select 
+                            className="input-field text-sm"
+                            value={attr.type}
+                            onChange={e => {
+                              const newAttrs = [...attributes]
+                              newAttrs[idx].type = e.target.value
+                              setAttributes(newAttrs)
+                            }}
+                          >
+                            <option value="text">Plain Text</option>
+                            <option value="rich_text">Rich Text / Table</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-muted mb-1">Field Content</label>
+                        {attr.type === 'rich_text' ? (
+                          <RichTextEditor 
+                            value={attr.value} 
+                            onChange={(val) => {
+                              const newAttrs = [...attributes]
+                              newAttrs[idx].value = val
+                              setAttributes(newAttrs)
+                            }} 
+                          />
+                        ) : (
+                          <textarea 
+                            className="input-field text-sm"
+                            rows={3}
+                            value={attr.value}
+                            placeholder="Enter text..."
+                            onChange={e => {
+                              const newAttrs = [...attributes]
+                              newAttrs[idx].value = e.target.value
+                              setAttributes(newAttrs)
+                            }}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {attributes.length === 0 && (
+                    <div className="text-xs text-muted italic text-center p-4 border border-dashed border-border rounded-lg">
+                      No dynamic fields added. Click 'Add Field' to include custom specifications or tables.
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="pt-4 flex gap-3">
                 <button type="button" onClick={() => setShowModal(false)} className="btn-secondary flex-1 justify-center">
                   Cancel
@@ -677,9 +837,6 @@ export default function AdminProducts() {
                   + Add Picture URL
                 </button>
               </div>
-
-
-
               <div>
                 <label className="block text-sm font-semibold text-muted mb-1">Product Name <span className="text-red-500">*</span></label>
                 <input type="text" required className="input-field" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} />
@@ -689,7 +846,7 @@ export default function AdminProducts() {
                 <label className="block text-sm font-semibold text-muted mb-1">Description</label>
                 <textarea rows={3} className="input-field" value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})}></textarea>
               </div>
-              
+
               <div>
                 <label className="block text-sm font-semibold text-muted mb-1">Category</label>
                 <select 
@@ -703,7 +860,7 @@ export default function AdminProducts() {
                   ))}
                 </select>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-muted mb-1">Price (KES) <span className="text-red-500">*</span></label>
@@ -715,11 +872,126 @@ export default function AdminProducts() {
                 </div>
               </div>
 
+              {/* Flash Sales Section */}
+              <div className="grid grid-cols-2 gap-4 p-4 border border-primary/20 bg-primary/5 rounded-xl">
+                <div>
+                  <label className="block text-sm font-semibold text-primary mb-1">Flash Sale Price (KES)</label>
+                  <input type="number" step="0.01" placeholder="Optional" className="input-field border-primary/30 focus:border-primary" value={editForm.discount_price} onChange={e => setEditForm({...editForm, discount_price: e.target.value})} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-primary mb-1">Flash Sale End Date & Time</label>
+                  <input type="datetime-local" className="input-field border-primary/30 focus:border-primary" value={editForm.flash_sale_end_date} onChange={e => setEditForm({...editForm, flash_sale_end_date: e.target.value})} />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-muted mb-1">Product Status</label>
+                <select 
+                  className="input-field font-semibold"
+                  value={editForm.is_active ? 'true' : 'false'}
+                  onChange={e => setEditForm({...editForm, is_active: e.target.value === 'true'})}
+                >
+                  <option value="true">🟢 Active (Visible in Store)</option>
+                  <option value="false">🔴 Inactive (Hidden from Store)</option>
+                </select>
+              </div>
+
+              {/* Dynamic Attributes Section for Edit Form */}
+              <div className="border-t border-border/40 pt-4 mt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <label className="block text-sm font-bold text-foreground">Dynamic Fields (Optional)</label>
+                  <button 
+                    type="button" 
+                    onClick={() => setEditAttributes([...editAttributes, { name: '', type: 'text', value: '' }])}
+                    className="text-xs flex items-center gap-1 bg-primary/10 text-primary hover:bg-primary/20 px-2 py-1 rounded-md transition-colors"
+                  >
+                    <Plus size={14} /> Add Field
+                  </button>
+                </div>
+                
+                <div className="space-y-4">
+                  {editAttributes.map((attr, idx) => (
+                    <div key={idx} className="p-3 bg-surface/30 border border-border rounded-xl space-y-3 relative">
+                      <button 
+                        type="button" 
+                        onClick={() => setEditAttributes(editAttributes.filter((_, i) => i !== idx))}
+                        className="absolute top-2 right-2 text-muted hover:text-danger p-1 bg-background rounded-full transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                      
+                      <div className="grid grid-cols-2 gap-3 pr-6">
+                        <div>
+                          <label className="block text-xs font-semibold text-muted mb-1">Field Name</label>
+                          <input 
+                            type="text" 
+                            className="input-field text-sm" 
+                            value={attr.name} 
+                            placeholder="Field Name"
+                            onChange={e => {
+                              const newAttrs = [...editAttributes]
+                              newAttrs[idx].name = e.target.value
+                              setEditAttributes(newAttrs)
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold text-muted mb-1">Field Type</label>
+                          <select 
+                            className="input-field text-sm"
+                            value={attr.type}
+                            onChange={e => {
+                              const newAttrs = [...editAttributes]
+                              newAttrs[idx].type = e.target.value
+                              setEditAttributes(newAttrs)
+                            }}
+                          >
+                            <option value="text">Plain Text</option>
+                            <option value="rich_text">Rich Text / Table</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-semibold text-muted mb-1">Field Content</label>
+                        {attr.type === 'rich_text' ? (
+                          <RichTextEditor 
+                            value={attr.value} 
+                            onChange={(val) => {
+                              const newAttrs = [...editAttributes]
+                              newAttrs[idx].value = val
+                              setEditAttributes(newAttrs)
+                            }} 
+                          />
+                        ) : (
+                          <textarea 
+                            className="input-field text-sm"
+                            rows={3}
+                            value={attr.value}
+                            placeholder="Enter text..."
+                            onChange={e => {
+                              const newAttrs = [...editAttributes]
+                              newAttrs[idx].value = e.target.value
+                              setEditAttributes(newAttrs)
+                            }}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {editAttributes.length === 0 && (
+                    <div className="text-xs text-muted italic text-center p-4 border border-dashed border-border rounded-lg">
+                      No dynamic fields added.
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="pt-4 flex gap-3">
                 <button type="button" onClick={() => setShowEditModal(false)} className="btn-secondary flex-1 justify-center">
                   Cancel
                 </button>
-                <button type="submit" disabled={submittingEdit} className="btn-primary bg-success hover:bg-success/90 border-none flex-1 justify-center">
+                <button type="submit" disabled={submittingEdit} className="btn-success flex-1 justify-center">
                   {submittingEdit ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
@@ -754,7 +1026,7 @@ export default function AdminProducts() {
                 type="button" 
                 onClick={handleDeleteConfirm}
                 disabled={submittingDelete}
-                className="btn-primary bg-red-600 hover:bg-red-700 flex-1 justify-center border-none text-white font-bold"
+                className="btn-danger flex-1 justify-center"
               >
                 {submittingDelete ? 'Deleting...' : 'Delete'}
               </button>

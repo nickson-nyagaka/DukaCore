@@ -410,7 +410,7 @@ export default function AdminVouchersPage() {
                 <button onClick={() => setShowDeleteModal(false)} className="btn-secondary flex-1 justify-center">
                   Cancel
                 </button>
-                <button onClick={confirmDelete} disabled={submitting} className="bg-danger text-white hover:bg-danger/90 px-4 py-2.5 rounded-xl font-semibold transition-all flex-1 justify-center">
+                <button onClick={confirmDelete} disabled={submitting} className="btn-danger flex-1 justify-center">
                   {submitting ? 'Deleting...' : 'Delete'}
                 </button>
               </div>

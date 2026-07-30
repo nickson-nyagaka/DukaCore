@@ -4,12 +4,14 @@ import { useState } from 'react'
 import { ShoppingCart, Minus, Plus, Heart, Bell, AlertCircle } from 'lucide-react'
 import { useCartStore } from '@/lib/cart-store'
 import { useAuth, apiFetch } from '@/lib/auth'
+import LoginPromptModal from '@/components/LoginPromptModal'
 
 export default function ProductActions({ product }: { product: any }) {
   const [qty, setQty] = useState(1)
   const [adding, setAdding] = useState(false)
   const [toast, setToast] = useState('')
-  const { addItem, localAddItem } = useCartStore()
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false)
+  const { addItem } = useCartStore()
   const { user } = useAuth()
 
   const [wishlisted, setWishlisted] = useState(!!product.is_wishlisted)
@@ -17,20 +19,13 @@ export default function ProductActions({ product }: { product: any }) {
   const [wishlistLoading, setWishlistLoading] = useState(false)
 
   const handleAdd = async () => {
+    if (!user) {
+      setShowLoginPrompt(true)
+      return
+    }
     setAdding(true)
     try {
-      if (user) {
-        await addItem(product.id, qty)
-      } else {
-        localAddItem({
-          product_id: product.id,
-          quantity: qty,
-          name: product.name,
-          price: product.price,
-          image_url: product.image_url,
-          slug: product.slug,
-        })
-      }
+      await addItem(product.id, qty)
       setToast(`✅ Added to cart!`)
       setTimeout(() => setToast(''), 3000)
     } catch {
@@ -43,7 +38,7 @@ export default function ProductActions({ product }: { product: any }) {
 
   const handleToggleWishlist = async () => {
     if (!user) {
-      alert('Please sign in to save items to your wishlist.')
+      setShowLoginPrompt(true)
       return
     }
     setWishlistLoading(true)
@@ -148,6 +143,8 @@ export default function ProductActions({ product }: { product: any }) {
           </button>
         </div>
       )}
+
+      <LoginPromptModal isOpen={showLoginPrompt} onClose={() => setShowLoginPrompt(false)} />
 
       {toast && (
         <div className="mt-3 text-sm font-semibold text-primary animate-fade-in">{toast}</div>

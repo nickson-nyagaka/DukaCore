@@ -35,6 +35,9 @@ class ProductSchema(Schema):
     rating: Optional[float] = None
     reviews_count: int = 0
     is_wishlisted: bool = False
+    attributes: list = []
+    discount_price: Optional[float] = None
+    flash_sale_end_date: Optional[datetime.datetime] = None
 
 class WishlistToggleInputSchema(Schema):
     product_id: int
@@ -61,6 +64,9 @@ class ProductListSchema(Schema):
     image_url: Optional[str] = None
     is_active: bool
     stock_quantity: int
+    attributes: list = []
+    discount_price: Optional[float] = None
+    flash_sale_end_date: Optional[datetime.datetime] = None
 
 @router.get("/categories", response=List[CategorySchema])
 async def list_categories(request):
@@ -93,6 +99,9 @@ async def list_products(request, category: Optional[str] = None, search: Optiona
             image_url=primary.url if primary else None,
             is_active=p.is_active,
             stock_quantity=p.stock_quantity,
+            attributes=p.attributes,
+            discount_price=float(p.discount_price) if p.discount_price else None,
+            flash_sale_end_date=p.flash_sale_end_date
         ))
     return result
 
@@ -144,7 +153,10 @@ async def get_product(request, slug: str):
         category_id=product.category_id,
         rating=avg_rating,
         reviews_count=reviews_count,
-        is_wishlisted=is_wishlisted
+        is_wishlisted=is_wishlisted,
+        attributes=product.attributes,
+        discount_price=float(product.discount_price) if product.discount_price else None,
+        flash_sale_end_date=product.flash_sale_end_date
     )
 
 @router.post("/wishlist/toggle", auth=JWTAuth())

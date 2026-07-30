@@ -47,6 +47,9 @@ class ProductCreateSchema(Schema):
     category_id: Optional[int] = None
     image_url: Optional[str] = None
     image_urls: List[str] = []
+    attributes: list = []
+    discount_price: Optional[float] = None
+    flash_sale_end_date: Optional[datetime] = None
 
 class ProductUpdateSchema(Schema):
     name: Optional[str] = None
@@ -57,6 +60,9 @@ class ProductUpdateSchema(Schema):
     category_id: Optional[int] = None
     image_url: Optional[str] = None
     image_urls: Optional[List[str]] = None
+    attributes: Optional[list] = None
+    discount_price: Optional[float] = None
+    flash_sale_end_date: Optional[datetime] = None
 
 class ProductOutSchema(Schema):
     id: int
@@ -67,6 +73,9 @@ class ProductOutSchema(Schema):
     is_active: bool
     category_id: Optional[int] = None
     image_urls: List[str] = []
+    attributes: list = []
+    discount_price: Optional[float] = None
+    flash_sale_end_date: Optional[datetime] = None
 
     @staticmethod
     def resolve_image_urls(obj):
@@ -90,7 +99,10 @@ def create_product(request, data: ProductCreateSchema):
         price=data.price,
         stock_quantity=data.stock_quantity,
         is_active=data.is_active,
-        category_id=data.category_id
+        category_id=data.category_id,
+        attributes=data.attributes,
+        discount_price=data.discount_price,
+        flash_sale_end_date=data.flash_sale_end_date
     )
     
     urls = list(data.image_urls) if data.image_urls else []
@@ -130,6 +142,10 @@ def update_product(request, product_id: int, data: ProductUpdateSchema):
     for attr, value in update_data.items():
         setattr(product, attr, value)
         
+    # If stock is replenished (> 0) and is_active was not explicitly set to False, automatically reactivate product
+    if product.stock_quantity > 0 and 'is_active' not in update_data:
+        product.is_active = True
+
     product.save()
     
     if product.stock_quantity > 0:

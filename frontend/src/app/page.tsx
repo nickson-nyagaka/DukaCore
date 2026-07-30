@@ -8,6 +8,7 @@ import { useCartStore } from '@/lib/cart-store'
 import { useAuth } from '@/lib/auth'
 
 
+import LoginPromptModal from '@/components/LoginPromptModal'
 
 const PERKS = [
   { icon: <Truck size={20} />, title: 'Free Delivery', desc: 'On orders over KES 2,000' },
@@ -18,7 +19,10 @@ const PERKS = [
 
 function ProductCard({ product, onAddToCart }: { product: any; onAddToCart: (p: any) => void }) {
   const [adding, setAdding] = useState(false)
-  const discountPct = Math.floor(Math.random() * 20) + 10
+  
+  const isFlashSale = product.discount_price && product.flash_sale_end_date && new Date(product.flash_sale_end_date) > new Date()
+  const currentPrice = isFlashSale ? Number(product.discount_price) : Number(product.price)
+  const discountPct = isFlashSale ? Math.round(((Number(product.price) - currentPrice) / Number(product.price)) * 100) : 0
 
   const handleAdd = async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -38,9 +42,14 @@ function ProductCard({ product, onAddToCart }: { product: any; onAddToCart: (p: 
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-4xl text-muted/40">📦</div>
         )}
-        <span className="absolute top-2.5 left-2.5">
-          <span className="badge-pill bg-danger/10 text-danger">-{discountPct}%</span>
-        </span>
+        {isFlashSale && (
+          <span className="absolute top-2.5 left-2.5">
+            <span className="badge-pill bg-danger text-white shadow-sm flex items-center gap-1">
+              <Zap size={10} fill="currentColor" />
+              SALE -{discountPct}%
+            </span>
+          </span>
+        )}
       </div>
 
       {/* Body */}
@@ -52,10 +61,12 @@ function ProductCard({ product, onAddToCart }: { product: any; onAddToCart: (p: 
         </div>
         <p className="text-sm font-semibold text-foreground dark:text-foreground-dark leading-snug line-clamp-2">{product.name}</p>
         <div className="mt-auto flex items-baseline gap-2">
-          <span className="text-base font-extrabold text-primary">KES {Number(product.price).toLocaleString()}</span>
-          <span className="text-xs text-muted line-through">
-            KES {Math.floor(product.price * (1 + discountPct / 100)).toLocaleString()}
-          </span>
+          <span className="text-base font-extrabold text-primary">KES {currentPrice.toLocaleString()}</span>
+          {isFlashSale && (
+            <span className="text-xs text-muted line-through">
+              KES {Number(product.price).toLocaleString()}
+            </span>
+          )}
         </div>
       </div>
 
@@ -97,6 +108,7 @@ function HomeContent() {
   const { addItem, localAddItem } = useCartStore()
   const { user } = useAuth()
   const [toast, setToast] = useState('')
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false)
 
   useEffect(() => {
     fetch('/api/catalog/categories')
@@ -119,20 +131,16 @@ function HomeContent() {
   }, [search, category])
 
   const handleAddToCart = async (product: any) => {
-    if (user) {
-      try {
-        await addItem(product.id)
-      } catch {
-        showToast('Please login to add items')
-        return
-      }
-    } else {
-      localAddItem({
-        product_id: product.id, quantity: 1, name: product.name,
-        price: product.price, image_url: product.image_url, slug: product.slug
-      })
+    if (!user) {
+      setShowLoginPrompt(true)
+      return
     }
-    showToast(`✅ ${product.name.substring(0, 20)}... added!`)
+    try {
+      await addItem(product.id)
+      showToast(`✅ ${product.name.substring(0, 20)}... added!`)
+    } catch {
+      showToast('Failed to add item — please try again')
+    }
   }
 
   const showToast = (msg: string) => {
@@ -235,6 +243,8 @@ function HomeContent() {
       </div>
 
       {/* Toast */}
+      <LoginPromptModal isOpen={showLoginPrompt} onClose={() => setShowLoginPrompt(false)} />
+
       {toast && (
         <div className="fixed bottom-6 right-6 z-50 glass rounded-xl px-5 py-3 text-sm font-semibold text-foreground dark:text-foreground-dark animate-slide-up">
           {toast}

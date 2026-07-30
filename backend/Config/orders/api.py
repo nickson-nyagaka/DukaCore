@@ -48,7 +48,9 @@ class OrderStatusHistorySchema(Schema):
 class OrderListOutSchema(Schema):
     id: int
     total_amount: float
+    total_price: float
     status: str
+    shipping_address: str = ""
     created_at: datetime.datetime
     customer_email: str
     vendor_id: Optional[int] = None
@@ -64,9 +66,9 @@ class OrderStatusOutSchema(Schema):
 def list_orders(request, q: Optional[str] = None):
     user = request.user
     if user.role in ['ADMIN', 'STAFF']:
-        qs = Order.objects.prefetch_related('status_history__changed_by', 'items__product__images').select_related('customer').order_by('-created_at')
+        qs = Order.objects.prefetch_related('status_history__changed_by', 'items__product__images').select_related('customer', 'payment').order_by('-created_at')
     else:
-        qs = Order.objects.prefetch_related('status_history__changed_by', 'items__product__images').filter(customer=user).select_related('customer').order_by('-created_at')
+        qs = Order.objects.prefetch_related('status_history__changed_by', 'items__product__images').filter(customer=user).select_related('customer', 'payment').order_by('-created_at')
         
     if q:
         from django.db.models import Q
@@ -105,7 +107,9 @@ def list_orders(request, q: Optional[str] = None):
         result.append(OrderListOutSchema(
             id=o.id,
             total_amount=float(o.total_amount),
+            total_price=float(o.total_amount),
             status=o.status,
+            shipping_address=getattr(o, 'shipping_address', None) or (o.payment.phone_number_used if hasattr(o, 'payment') and o.payment and o.payment.phone_number_used else "Standard Delivery"),
             created_at=o.created_at,
             customer_email=o.customer.email,
             vendor_id=None,
@@ -236,13 +240,17 @@ def checkout(request, data: CheckoutSchema):
             product.stock_quantity -= qty
             product.save()
 
-            item_subtotal = float(product.price) * qty
+            from django.utils import timezone
+            is_flash_sale = product.discount_price and product.flash_sale_end_date and product.flash_sale_end_date > timezone.now()
+            unit_price = float(product.discount_price) if is_flash_sale else float(product.price)
+
+            item_subtotal = unit_price * qty
             total_amount += item_subtotal
             
             locked_items.append({
                 'product': product,
                 'quantity': qty,
-                'unit_price': float(product.price),
+                'unit_price': unit_price,
             })
             
         discount_amount = 0.0
@@ -447,8 +455,7 @@ def submit_product_review(request, data: ReviewInputSchema):
         raise HttpError(400, "Rating must be between 1 and 5")
         
     order_item = OrderItem.objects.filter(
-        order__customer=user,
-        order__status__in=['SHIPPED', 'DELIVERED'],
+        order__customer_id=user.id,
         product=product
     ).first()
     

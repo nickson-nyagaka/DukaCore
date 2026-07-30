@@ -16,6 +16,7 @@ const pageTitles: Record<string, string> = {
   '/admin/team': 'User Management',
   '/admin/vouchers': 'Vouchers',
   '/admin/security/access-log': 'Access Log',
+  '/admin/settings': 'Settings',
 }
 
 export default function AdminTopbar() {
