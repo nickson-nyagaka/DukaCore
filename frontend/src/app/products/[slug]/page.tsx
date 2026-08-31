@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation'
+import { Zap } from 'lucide-react'
 import { serverFetch } from '@/lib/server-fetch'
 import ProductActions from './ProductActions'
 import ProductGallery from './ProductGallery'
@@ -44,14 +45,29 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               
               return (
                 <div className="mt-4">
-                  <div className="flex items-baseline gap-3">
-                    <p className="text-2xl font-extrabold text-primary">
+                  {isFlashSale && (
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-pink-600 via-pink-500 to-purple-600 text-white text-xs font-black uppercase mb-3 shadow-md shadow-pink-500/20 border border-pink-400/40 animate-pulse">
+                      <Zap size={14} className="fill-white text-amber-200" />
+                      <span>⚡ Flash Sale!!!</span>
+                      <span className="bg-white text-pink-600 px-2 py-0.5 rounded-full text-[10px] font-black shadow-sm">
+                        SAVE {discountPct}% OFF
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex items-baseline gap-3 flex-wrap">
+                    <p className={`text-3xl font-black ${isFlashSale ? 'text-pink-400' : 'text-primary'}`}>
                       KES {currentPrice.toLocaleString()}
                     </p>
                     {isFlashSale && (
-                      <p className="text-lg text-muted line-through">
+                      <p className="text-lg text-muted line-through font-medium">
                         KES {Number(product.price).toLocaleString()}
                       </p>
+                    )}
+                    {isFlashSale && (
+                      <span className="text-xs font-bold text-pink-300 bg-pink-950/60 border border-pink-500/30 px-2.5 py-1 rounded-xl">
+                        Save KES {(Number(product.price) - currentPrice).toLocaleString()} ({discountPct}% cut)
+                      </span>
                     )}
                   </div>
                   {isFlashSale && <FlashSaleBanner endDate={product.flash_sale_end_date} />}

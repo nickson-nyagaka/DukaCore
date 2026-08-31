@@ -31,12 +31,21 @@ def build_daraja_style_payload(checkout_request_id: str, outcome: str) -> dict:
     }
 
     if outcome == "SUCCESS":
+        from orders.models import Payment
+        payment = Payment.objects.filter(checkout_request_id=checkout_request_id).first()
+        amount = int(float(payment.amount)) if payment else 100
+        phone = int(payment.phone_number_used.replace("+", "")) if (payment and payment.phone_number_used) else 254708374149
+        
+        # Generate realistic alphanumeric M-Pesa receipt e.g. RHK8921JKA
+        chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        receipt_no = "MVE" + "".join(random.choices(chars, k=7))
+        
         payload["Body"]["stkCallback"]["CallbackMetadata"] = {
             "Item": [
-                {"Name": "Amount", "Value": 100},
-                {"Name": "MpesaReceiptNumber", "Value": f"MOCK{random.randint(10000, 99999)}"},
-                {"Name": "TransactionDate", "Value": int(timezone.now().timestamp() * 1000)},
-                {"Name": "PhoneNumber", "Value": 254700000000}
+                {"Name": "Amount", "Value": amount},
+                {"Name": "MpesaReceiptNumber", "Value": receipt_no},
+                {"Name": "TransactionDate", "Value": int(timezone.now().strftime('%Y%m%d%H%M%S'))},
+                {"Name": "PhoneNumber", "Value": phone}
             ]
         }
 
@@ -50,8 +59,6 @@ def _fire_callback(checkout_request_id: str, outcome: str):
     payload = build_daraja_style_payload(checkout_request_id, outcome)
     schema_instance = DarajaCallbackSchema.parse_obj(payload)
     
-    # We must ensure the DB connections are closed after thread finishes
-    # Django handles this automatically if wrapped in connection.close() or we just let it be for dev
     from django.db import connection
     try:
         process_mpesa_callback(schema_instance.Body.stkCallback)
@@ -59,13 +66,13 @@ def _fire_callback(checkout_request_id: str, outcome: str):
         connection.close()
 
 
-def schedule_mock_callback(checkout_request_id: str, order_id: int, outcome: str = None, delay_seconds: int = 10):
+def schedule_mock_callback(checkout_request_id: str, order_id: int, outcome: str = None, delay_seconds: int = 5):
     """
-    outcome: None = randomly weighted realistic mix.
+    Simulates realistic user entering PIN on their phone.
+    Default outcome: 100% SUCCESS for seamless testing unless specified.
     """
     if outcome is None:
-        outcome = random.choices(["SUCCESS", "INSUFFICIENT_FUNDS", "CANCELLED"], weights=[80, 10, 10])[0]
+        outcome = "SUCCESS"
 
-    # Use threading.Timer to execute the callback asynchronously in dev mode
     timer = threading.Timer(delay_seconds, _fire_callback, args=[checkout_request_id, outcome])
     timer.start()

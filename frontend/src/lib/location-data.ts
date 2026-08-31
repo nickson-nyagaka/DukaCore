@@ -209,6 +209,11 @@ export const KENYAN_COUNTIES: County[] = [
 
 export const PICKUP_STATIONS: PickupStation[] = [
   // ---------------------------------------------------------------------------
+  // ACTUAL SHOP LOCATION (FREE / NIL PICKUP)
+  // ---------------------------------------------------------------------------
+  { id: 1, county: 'Nairobi', town: 'Starehe', name: '🏬 Mavine Households Main Shop (Actual Shop Location) — FREE Pick-Up', fee: 0 },
+
+  // ---------------------------------------------------------------------------
   // 1. NAIROBI COUNTY (All 17 Constituencies)
   // ---------------------------------------------------------------------------
   { id: 101, county: 'Nairobi', town: 'Starehe', name: 'Starehe Hub - Kimathi House, 1st Floor (CBD)', fee: 100 },

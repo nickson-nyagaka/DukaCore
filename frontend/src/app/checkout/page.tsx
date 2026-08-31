@@ -38,7 +38,7 @@ export default function CheckoutPage() {
   } | null>(null)
   const [usingSavedAddress, setUsingSavedAddress] = useState(false)
 
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('MOCK')
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('MPESA')
   const [status, setStatus] = useState<CheckoutStatus>('form')
   const [error, setError] = useState('')
   const pollRef = useRef<NodeJS.Timeout | null>(null)
@@ -50,10 +50,10 @@ export default function CheckoutPage() {
   // Available pickup stations for selected county
   const availableStations = PICKUP_STATIONS.filter(s => s.county === selectedCounty)
 
-  // Calculate delivery fee
+  // Calculate delivery fee (Actual shop pickup is 0 / NIL)
   const selectedStation = PICKUP_STATIONS.find(s => s.id === selectedStationId)
   const doorstepFee = total >= 2000 ? 0 : 200
-  const delivery = deliveryMode === 'pickup' ? (selectedStation ? selectedStation.fee : 100) : doorstepFee
+  const delivery = deliveryMode === 'pickup' ? (selectedStation ? Number(selectedStation.fee) : 0) : doorstepFee
   const grandTotal = total + delivery
 
   // Update selected town if current town is not in new county
@@ -224,6 +224,7 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           phone_number: phone,
           shipping_address: formattedAddress,
+          delivery_fee: delivery,
           payment_method: paymentMethod,
         }),
       })
@@ -232,8 +233,8 @@ export default function CheckoutPage() {
         setStatus('awaiting_confirmation')
         startPolling(data.checkout_request_id)
       } else {
-        setStatus('success')
-        clearCart()
+        setError('Payment verification pending. Please try again.')
+        setStatus('form')
       }
     } catch (err: any) {
       setError(err.message || 'Checkout failed')
@@ -243,9 +244,10 @@ export default function CheckoutPage() {
 
   const startPolling = (checkoutRequestId: string) => {
     let attempts = 0
+    if (pollRef.current) clearInterval(pollRef.current)
     pollRef.current = setInterval(async () => {
       attempts++
-      if (attempts > 30) {
+      if (attempts > 35) {
         clearInterval(pollRef.current!)
         setStatus('timeout')
         return
@@ -260,11 +262,12 @@ export default function CheckoutPage() {
         } else if (data.status === 'FAILED') {
           clearInterval(pollRef.current!)
           setStatus('failed')
+          setError(data.message || 'M-Pesa payment was cancelled or failed. Please try again.')
         }
       } catch {
         // keep polling
       }
-    }, 3000)
+    }, 2500)
   }
 
   // ── Success State ──
@@ -293,19 +296,32 @@ export default function CheckoutPage() {
   if (status === 'failed') {
     return (
       <div className="max-w-md mx-auto px-4 py-20 text-center animate-fade-in">
-        <div className="glass rounded-3xl p-10">
+        <div className="glass rounded-3xl p-10 border border-danger/25">
           <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-danger/10 flex items-center justify-center">
             <XCircle size={32} className="text-danger" />
           </div>
-          <h1 className="text-2xl font-bold text-foreground" style={{ fontFamily: 'var(--font-heading)' }}>
-            Payment Failed
+          <h1 className="text-2xl font-extrabold text-foreground" style={{ fontFamily: 'var(--font-heading)' }}>
+            Payment Not Completed
           </h1>
-          <p className="text-sm text-muted mt-2">
-            The M-Pesa payment was cancelled or failed due to insufficient funds.
+          <p className="text-sm text-muted mt-2 leading-relaxed">
+            {error || 'The M-Pesa transaction was cancelled or could not be authorized. No funds were deducted.'}
           </p>
-          <button onClick={() => setStatus('form')} className="btn-pill-primary mt-6 inline-flex py-3 px-8 text-sm font-bold">
-            Try Again
-          </button>
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center items-center">
+            <button 
+              onClick={() => {
+                setStatus('form')
+              }} 
+              className="btn-pill-primary py-3 px-8 text-sm font-bold cursor-pointer w-full sm:w-auto"
+            >
+              Restart Checkout
+            </button>
+            <Link 
+              href="/cart" 
+              className="px-6 py-3 rounded-full text-sm font-bold glass text-muted hover:text-foreground border border-border/40 w-full sm:w-auto text-center"
+            >
+              Review Cart
+            </Link>
+          </div>
         </div>
       </div>
     )
@@ -588,7 +604,9 @@ export default function CheckoutPage() {
                               <span className="text-xs text-muted">Area: {st.town}</span>
                             </div>
                           </div>
-                          <span className="text-xs font-black text-primary">KES {st.fee}</span>
+                          <span className={`text-xs font-extrabold ${st.fee === 0 ? 'text-success bg-success/10 px-2 py-0.5 rounded-full' : 'text-primary'}`}>
+                            {st.fee === 0 ? 'FREE (NIL)' : `KES ${st.fee}`}
+                          </span>
                         </label>
                       ))}
                     </div>
@@ -608,32 +626,23 @@ export default function CheckoutPage() {
               3. Payment Method
             </h2>
 
-            <div className="grid grid-cols-2 gap-3">
-              {([
-                { value: 'MOCK' as PaymentMethod, icon: <CreditCard size={20} />, label: 'Mock Payment', desc: 'Simulate instant payment' },
-                { value: 'MPESA' as PaymentMethod, icon: <Smartphone size={20} />, label: 'M-Pesa STK Push', desc: 'Direct prompt to your phone' },
-              ]).map(opt => (
-                <label
-                  key={opt.value}
-                  className={`glass rounded-xl p-4 cursor-pointer transition-all border ${
-                    paymentMethod === opt.value
-                      ? 'border-primary ring-2 ring-primary/20 bg-primary/5'
-                      : 'hover:border-primary/30'
-                  }`}
-                >
-                  <input
-                    type="radio" name="payment" value={opt.value}
-                    checked={paymentMethod === opt.value}
-                    onChange={() => setPaymentMethod(opt.value)}
-                    className="sr-only"
-                  />
-                  <div className={`mb-2 ${paymentMethod === opt.value ? 'text-primary' : 'text-muted'}`}>
-                    {opt.icon}
+            <div className="glass rounded-2xl p-5 border border-primary/30 ring-2 ring-primary/15 bg-primary/5 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="p-3 rounded-2xl bg-primary/10 text-primary shrink-0">
+                  <Smartphone size={24} />
+                </div>
+                <div className="min-w-0">
+                  <div className="text-sm font-extrabold text-foreground flex items-center gap-2 flex-wrap">
+                    <span>Lipa Na M-Pesa (Online STK Push)</span>
+                    <span className="text-[10px] font-black uppercase bg-success/15 text-success px-2 py-0.5 rounded-full border border-success/25">
+                      Instant & Secure
+                    </span>
                   </div>
-                  <div className="text-sm font-bold text-foreground">{opt.label}</div>
-                  <div className="text-[11px] text-muted">{opt.desc}</div>
-                </label>
-              ))}
+                  <p className="text-xs text-muted mt-0.5">
+                    An automated prompt will be sent directly to your phone ({phone || 'Kenyan phone number'}) to authorize with your M-Pesa PIN.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
 

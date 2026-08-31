@@ -8,6 +8,7 @@ import { useCartStore } from '@/lib/cart-store'
 import { useAuth, apiFetch } from '@/lib/auth'
 
 import LoginPromptModal from '@/components/LoginPromptModal'
+import { FlashSaleCardTimer } from '@/components/FlashSaleBanner'
 
 const PERKS = [
   { icon: <Truck size={20} />, title: 'Reliable Delivery', desc: 'Fast & safe delivery to your doorstep' },
@@ -54,10 +55,25 @@ function ProductCard({
   return (
     <Link 
       href={`/products/${product.slug}`} 
-      className={`group glass rounded-2xl overflow-hidden flex flex-col transition-all duration-300 hover:-translate-y-1 hover:border-primary/40 ${
-        isDeactivated ? 'border-amber-500/20 bg-surface/30' : ''
+      className={`group glass rounded-2xl overflow-hidden flex flex-col transition-all duration-300 hover:-translate-y-1.5 relative ${
+        isFlashSale 
+          ? 'border-pink-500/40 shadow-lg shadow-pink-500/10 hover:border-pink-500 hover:shadow-pink-500/25 ring-1 ring-pink-500/20' 
+          : isDeactivated ? 'border-amber-500/20 bg-surface/30' : 'hover:border-primary/40'
       }`}
     >
+      {/* ── Standout Top Header Ribbon for Flash Sale Items ── */}
+      {isFlashSale && (
+        <div className="bg-gradient-to-r from-pink-600 via-pink-500 to-purple-600 px-3 py-1.5 flex items-center justify-between text-white shadow-sm shrink-0 border-b border-pink-400/30">
+          <div className="flex items-center gap-1.5 font-black text-xs tracking-wider uppercase drop-shadow-sm">
+            <Zap size={13} className="fill-white animate-pulse text-amber-200" />
+            <span>Flash Sale!!!</span>
+          </div>
+          <span className="text-[10px] font-black uppercase bg-white text-pink-600 px-2 py-0.5 rounded-full shadow-sm">
+            -{discountPct}% OFF
+          </span>
+        </div>
+      )}
+
       {/* Image */}
       <div className="aspect-square relative bg-gray-100 dark:bg-card-dark overflow-hidden">
         {product.image_url ? (
@@ -83,13 +99,19 @@ function ProductCard({
             </div>
           </div>
         ) : isFlashSale ? (
-          <span className="absolute top-2.5 left-2.5">
-            <span className="badge-pill bg-danger text-white shadow-sm flex items-center gap-1">
-              <Zap size={10} fill="currentColor" />
-              SALE -{discountPct}%
+          <div className="absolute top-2.5 left-2.5 flex flex-col gap-1 z-10 pointer-events-none">
+            <span className="bg-pink-600 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-lg flex items-center gap-1 w-fit border border-pink-400/40 animate-pulse">
+              <Zap size={10} fill="currentColor" /> SAVE {discountPct}%
             </span>
-          </span>
+          </div>
         ) : null}
+
+        {/* Duration Countdown Timer on Image Bottom */}
+        {isFlashSale && product.flash_sale_end_date && (
+          <div className="absolute bottom-2 left-2 right-2 z-10">
+            <FlashSaleCardTimer endDate={product.flash_sale_end_date} />
+          </div>
+        )}
       </div>
 
       {/* Body */}
@@ -102,13 +124,22 @@ function ProductCard({
         <p className={`text-sm font-semibold leading-snug line-clamp-2 ${isDeactivated ? 'text-foreground/75' : 'text-foreground dark:text-foreground-dark'}`}>
           {product.name}
         </p>
-        <div className="mt-auto flex items-baseline gap-2">
-          <span className={`text-base font-extrabold ${isDeactivated ? 'text-muted' : 'text-primary'}`}>
-            KES {currentPrice.toLocaleString()}
-          </span>
+
+        <div className="mt-auto flex flex-col gap-0.5">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <span className={`text-base font-black ${isFlashSale ? 'text-pink-400' : isDeactivated ? 'text-muted' : 'text-primary'}`}>
+              KES {currentPrice.toLocaleString()}
+            </span>
+            {isFlashSale && (
+              <span className="text-xs text-muted line-through font-medium">
+                KES {Number(product.price).toLocaleString()}
+              </span>
+            )}
+          </div>
           {isFlashSale && (
-            <span className="text-xs text-muted line-through">
-              KES {Number(product.price).toLocaleString()}
+            <span className="text-[11px] font-extrabold text-pink-400 flex items-center gap-1">
+              <span>Save KES {(Number(product.price) - currentPrice).toLocaleString()}</span>
+              <span className="text-[10px] font-black uppercase bg-pink-500/15 text-pink-300 px-1.5 py-0.2 rounded">({discountPct}% cut)</span>
             </span>
           )}
         </div>
@@ -133,10 +164,10 @@ function ProductCard({
           <button
             onClick={handleAdd}
             disabled={adding}
-            className="btn-pill-primary w-full text-xs py-2 cursor-pointer"
+            className={`w-full text-xs py-2 cursor-pointer ${isFlashSale ? 'btn-pill-accent bg-gradient-to-r from-pink-500 via-pink-600 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-extrabold shadow-md shadow-pink-500/20' : 'btn-pill-primary'}`}
           >
             <ShoppingCart size={14} />
-            {adding ? 'Adding...' : 'Add to Cart'}
+            {adding ? 'Adding...' : isFlashSale ? '⚡ Claim Flash Deal' : 'Add to Cart'}
           </button>
         )}
       </div>
@@ -411,6 +442,56 @@ function HomeContent() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* ── DEDICATED FLASH SALE SECTION ── */}
+      {!isFiltered && products.some(p => p.is_active !== false && p.discount_price && p.flash_sale_end_date && new Date(p.flash_sale_end_date) > new Date()) && (
+        <section className="mb-12 bg-gradient-to-br from-pink-950/40 via-purple-950/25 to-surface/90 border border-pink-500/30 rounded-3xl p-6 sm:p-8 shadow-xl shadow-pink-500/5 relative overflow-hidden animate-fade-in">
+          {/* Ambient Background Glows */}
+          <div className="absolute -top-24 -right-24 w-72 h-72 bg-pink-500/15 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-24 -left-24 w-72 h-72 bg-purple-500/15 rounded-full blur-3xl pointer-events-none" />
+
+          {/* Section Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 relative z-10 border-b border-pink-500/20 pb-5">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-pink-500 via-rose-500 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-pink-500/30 shrink-0">
+                <Zap size={24} className="fill-white animate-bounce text-amber-200" />
+              </div>
+              <div>
+                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight flex items-center gap-2" style={{ fontFamily: 'var(--font-heading)' }}>
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-rose-300 to-purple-300">
+                    ⚡ Flash Sale!!!
+                  </span>
+                  <span className="text-[11px] font-black uppercase bg-pink-500 text-white px-2.5 py-0.5 rounded-full shadow-md animate-pulse">
+                    Live Deals
+                  </span>
+                </h2>
+                <p className="text-xs text-pink-200/80 mt-0.5">
+                  Limited-time household essentials with major price cuts. Grab before the timer expires!
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 text-xs font-bold text-pink-300 bg-pink-950/70 border border-pink-500/30 px-3.5 py-2 rounded-2xl w-fit shrink-0">
+              <Sparkles size={14} className="text-pink-400 shrink-0" />
+              <span>Huge % Cuts — Limited Stock!</span>
+            </div>
+          </div>
+
+          {/* Flash Sale Product Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 relative z-10">
+            {products
+              .filter(p => p.is_active !== false && p.discount_price && p.flash_sale_end_date && new Date(p.flash_sale_end_date) > new Date())
+              .map(p => (
+                <ProductCard
+                  key={`flash-section-${p.id}`}
+                  product={p}
+                  onAddToCart={handleAddToCart}
+                  onNotifyMe={handleNotifyMe}
+                />
+              ))}
+          </div>
+        </section>
       )}
 
       {/* Categories */}

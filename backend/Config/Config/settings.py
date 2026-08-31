@@ -14,9 +14,22 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 
 # -------------------------------------------------------------------
-# Payments Gateway Config
+# Payments Gateway & M-Pesa Daraja Config
 # -------------------------------------------------------------------
-PAYMENT_GATEWAY_MODE = os.environ.get("PAYMENT_GATEWAY_MODE", "mock")  # "mock" | "daraja"
+PAYMENT_GATEWAY_MODE = os.environ.get("PAYMENT_GATEWAY_MODE", "daraja")  # "mock" | "daraja"
+
+# M-Pesa Sandbox / Live Credentials
+MPESA_ENVIRONMENT = os.environ.get("MPESA_ENVIRONMENT", "sandbox")
+MPESA_CONSUMER_KEY = os.environ.get("MPESA_CONSUMER_KEY", "CXZzBGjeVQhUyVgmTO2eShwjCPXd7eSG6XWCeJwT0f1QJOtQ")
+MPESA_CONSUMER_SECRET = os.environ.get("MPESA_CONSUMER_SECRET", "s6HURyEzwNjvLTSD6wvAAj4AYA9JmGYp7q4fdrVPHJ65fWV3JqJ3Y9aDPPGYbOT0")
+MPESA_SHORTCODE = os.environ.get("MPESA_SHORTCODE", "174379")
+MPESA_PASSKEY = os.environ.get("MPESA_PASSKEY", "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919")
+MPESA_INITIATOR_NAME = os.environ.get("MPESA_INITIATOR_NAME", "testapi")
+MPESA_INITIATOR_PASSWORD = os.environ.get("MPESA_INITIATOR_PASSWORD", "Safaricom123!!")
+MPESA_PARTY_A = os.environ.get("MPESA_PARTY_A", "600979")
+MPESA_PARTY_B = os.environ.get("MPESA_PARTY_B", "600000")
+MPESA_TEST_PHONE = os.environ.get("MPESA_TEST_PHONE", "254708374149")
+MPESA_CALLBACK_URL = os.environ.get("MPESA_CALLBACK_URL", "https://api.mavinehouseholds.com/api/orders/payment/callback")
 
 # Fail loudly at startup rather than silently letting mock mode reach production
 if not DEBUG and PAYMENT_GATEWAY_MODE == "mock":

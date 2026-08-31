@@ -29,8 +29,9 @@ class DeliveryZoneOutSchema(Schema):
 class CheckoutSchema(Schema):
     phone_number: str  # For M-Pesa push
     shipping_address: str
+    delivery_fee: float = 0.0
     delivery_zone_id: Optional[int] = None
-    payment_method: str = "MOCK"  # MOCK or MPESA
+    payment_method: str = "MPESA"  # MPESA or MOCK
     voucher_code: Optional[str] = None
 
 @router.get('/delivery-zones', response=List[DeliveryZoneOutSchema])
@@ -160,21 +161,56 @@ def get_order_status(request, order_id: int):
 
 class PaymentStatusOutSchema(Schema):
     status: str
+    message: Optional[str] = None
 
 @router.get('/payment/{checkout_request_id}/status', auth=JWTAuth(), response=PaymentStatusOutSchema)
 def get_payment_status(request, checkout_request_id: str):
     payment = get_object_or_404(Payment, checkout_request_id=checkout_request_id)
-    # Ensure the user asking owns the order
     if request.user.role not in ['ADMIN', 'STAFF']:
         if payment.order.customer_id != request.user.id:
             raise HttpError(403, "Forbidden")
             
-    # We map SUCCESS to PAID to match the frontend expectation if needed, or frontend can handle SUCCESS
-    frontend_status = payment.status
-    if frontend_status == 'SUCCESS':
-        frontend_status = 'PAID'
-        
-    return {"status": frontend_status}
+    # If already marked as SUCCESS or FAILED in DB
+    if payment.status == 'SUCCESS':
+        return {"status": "PAID", "message": "Payment verified successfully."}
+    elif payment.status == 'FAILED':
+        return {"status": "FAILED", "message": "The payment was cancelled or failed. Please try again."}
+
+    # If still PENDING, query the gateway
+    from payments.gateway import get_payment_gateway
+    from .services import transition_order_status
+    
+    gateway = get_payment_gateway()
+    query_res = gateway.query_status(checkout_request_id)
+    
+    status_val = query_res.get("status") if isinstance(query_res, dict) else query_res
+    
+    with transaction.atomic():
+        payment = Payment.objects.select_for_update().get(id=payment.id)
+        if payment.status == 'PENDING':
+            if status_val == 'SUCCESS':
+                payment.status = 'SUCCESS'
+                if isinstance(query_res, dict) and query_res.get("receipt"):
+                    payment.mpesa_receipt_number = query_res["receipt"]
+                payment.save()
+                transition_order_status(payment.order, 'PROCESSING', actor=None)
+                
+                # Clear backend cart on verified payment
+                try:
+                    from django.core.cache import cache
+                    cache.delete(f"cart:{payment.order.customer_id}")
+                except Exception as e:
+                    print(f"Error clearing cart: {e}")
+                    
+                return {"status": "PAID", "message": "Payment completed successfully."}
+            elif status_val == 'FAILED':
+                payment.status = 'FAILED'
+                payment.save()
+                transition_order_status(payment.order, 'CANCELLED', actor=None)
+                err_desc = query_res.get("desc") if isinstance(query_res, dict) else "Payment was cancelled or failed."
+                return {"status": "FAILED", "message": err_desc}
+
+    return {"status": "PENDING", "message": query_res.get("desc", "Waiting for M-Pesa authorization") if isinstance(query_res, dict) else "Pending"}
 
 def get_mpesa_access_token():
     consumer_key = getattr(settings, 'MPESA_CONSUMER_KEY', 'default_sandbox_key')
@@ -312,9 +348,9 @@ def checkout(request, data: CheckoutSchema):
             voucher.usage_count += 1
             voucher.save()
 
-        # Delivery zone calculation
+        # Delivery zone & fee calculation
         has_heavy = any(it['product'].is_heavy_item for it in locked_items)
-        shipping_fee = 0.0
+        shipping_fee = float(data.delivery_fee or 0.0)
         delivery_zone = None
         if data.delivery_zone_id:
             delivery_zone = DeliveryZone.objects.filter(id=data.delivery_zone_id, is_active=True).first()
@@ -355,30 +391,25 @@ def checkout(request, data: CheckoutSchema):
             phone_number_used=data.phone_number
         )
 
-        if data.payment_method == 'MPESA':
-            from payments.gateway import get_payment_gateway
-            try:
-                gateway = get_payment_gateway()
-                checkout_request_id = gateway.initiate_payment(order, data.phone_number)
-                payment.checkout_request_id = checkout_request_id
-                payment.save()
-            except Exception as e:
-                print(f"Gateway error: {e}")
-                raise HttpError(500, "Failed to initiate payment via gateway")
-
+        from payments.gateway import get_payment_gateway
         try:
-            from django.core.cache import cache
-            cache.delete(f"cart:{user.id}")
+            gateway = get_payment_gateway()
+            checkout_request_id = gateway.initiate_payment(order, data.phone_number)
+            payment.checkout_request_id = checkout_request_id
+            payment.save()
         except Exception as e:
-            print(f"Error clearing cart: {e}")
+            print(f"Gateway error: {e}")
+            raise HttpError(500, f"Failed to initiate payment via gateway: {e}")
 
-        AuditLog.log(user, "order.checkout", {"order_id": order.id, "total_amount": float(total_amount)})
+# Cart is only cleared when payment succeeds
+
+        AuditLog.log(user, "order.checkout", {"order_id": order.id, "total_amount": float(final_order_total)})
 
         return CheckoutResponseSchema(
             order_id=order.id,
-            total_amount=total_amount,
+            total_amount=final_order_total,
             status=order.status,
-            checkout_request_id=payment.checkout_request_id if data.payment_method == 'MPESA' else None
+            checkout_request_id=payment.checkout_request_id
         )
 
 class DarajaCallbackBodySchema(Schema):
@@ -425,6 +456,13 @@ def process_mpesa_callback(stk_callback) -> dict:
             payment.save()
 
             transition_order_status(order, 'PROCESSING', actor=None)
+            
+            # Clear backend cart now that payment is confirmed
+            try:
+                from django.core.cache import cache
+                cache.delete(f"cart:{order.customer_id}")
+            except Exception as e:
+                print(f"Error clearing cart: {e}")
         else:
             payment.status = 'FAILED'
             payment.save()
