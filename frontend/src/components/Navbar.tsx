@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
-import { ShoppingCart, User, Search, Package, LogOut, ChevronDown, Shield } from 'lucide-react'
+import { ShoppingCart, User, Search, Package, LogOut, ChevronDown, Shield, MapPin, Settings } from 'lucide-react'
 import { useAuth } from '@/lib/auth'
 import { useCartStore } from '@/lib/cart-store'
 import ThemeToggle from './ThemeToggle'
@@ -98,21 +98,36 @@ export default function Navbar() {
                 </button>
 
                 {userMenuOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-52 rounded-2xl glass p-2 z-50 animate-fade-in shadow-xl">
-                    <Link href="/account" prefetch={true} onClick={() => setUserMenuOpen(false)}
+                  <div className="absolute right-0 top-full mt-2 w-60 rounded-2xl glass p-2 z-50 animate-fade-in shadow-xl border border-border/40">
+                    {/* User identity mini header */}
+                    <div className="px-3 py-2 mb-1 border-b border-border/30">
+                      <p className="text-xs font-extrabold text-foreground truncate">{user.first_name ? `${user.first_name} ${user.last_name}` : user.username}</p>
+                      <p className="text-[11px] text-muted truncate">{user.email}</p>
+                    </div>
+
+                    <Link href="/account?tab=profile" prefetch={true} onClick={() => setUserMenuOpen(false)}
                       className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-foreground hover:bg-primary-light hover:text-primary transition-colors">
-                      <User size={16} /> My Account
+                      <Settings size={15} /> Account Details
                     </Link>
-                    <Link href="/account" prefetch={true} onClick={() => setUserMenuOpen(false)}
+                    <Link href="/account?tab=orders" prefetch={true} onClick={() => setUserMenuOpen(false)}
                       className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-foreground hover:bg-primary-light hover:text-primary transition-colors">
-                      <Package size={16} /> My Orders
+                      <Package size={15} /> My Orders
                     </Link>
-                    <hr className="my-1.5 border-border" />
+                    <Link href="/account?tab=addresses" prefetch={true} onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-foreground hover:bg-primary-light hover:text-primary transition-colors">
+                      <MapPin size={15} /> Address Book
+                    </Link>
+                    <Link href="/account?tab=wishlist" prefetch={true} onClick={() => setUserMenuOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium text-foreground hover:bg-primary-light hover:text-primary transition-colors">
+                      <User size={15} /> Wishlist & Alerts
+                    </Link>
+
+                    <hr className="my-1.5 border-border/40" />
                     <button
                       onClick={() => { logout(); setUserMenuOpen(false) }}
                       className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold text-danger hover:bg-danger/10 transition-colors w-full cursor-pointer"
                     >
-                      <LogOut size={16} /> Logout
+                      <LogOut size={15} /> Sign Out
                     </button>
                   </div>
                 )}

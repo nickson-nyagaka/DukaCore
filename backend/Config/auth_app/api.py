@@ -262,3 +262,159 @@ def accept_invite(request, data: AcceptInviteSchema):
     
     return {"success": True, "message": "Account created successfully. You can now login."}
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Profile & Password management
+# ─────────────────────────────────────────────────────────────────────────────
+
+class UpdateProfileSchema(Schema):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone_number: Optional[str] = None
+
+@router.patch('/profile', auth=JWTAuth(), response=UserSchema)
+def update_profile(request, data: UpdateProfileSchema):
+    from ninja.errors import HttpError
+    user = request.user
+    if data.first_name is not None:
+        user.first_name = data.first_name.strip()
+    if data.last_name is not None:
+        user.last_name = data.last_name.strip()
+    if data.phone_number is not None:
+        phone = data.phone_number.strip() or None
+        if phone and User.objects.filter(phone_number=phone).exclude(pk=user.pk).exists():
+            raise HttpError(400, 'Phone number already in use by another account')
+        user.phone_number = phone
+    user.save()
+    AuditLog.log(user, 'user.profile_updated')
+    permissions = get_user_permissions(user)
+    return {
+        'id': user.id,
+        'email': user.email,
+        'username': user.username,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'role': user.role,
+        'phone_number': user.phone_number,
+        'permissions': permissions,
+    }
+
+
+class ChangePasswordSchema(Schema):
+    current_password: str
+    new_password: str
+
+@router.post('/change-password', auth=JWTAuth())
+def change_password(request, data: ChangePasswordSchema):
+    from ninja.errors import HttpError
+    user = request.user
+    if not user.check_password(data.current_password):
+        raise HttpError(400, 'Current password is incorrect')
+    if len(data.new_password) < 8:
+        raise HttpError(400, 'New password must be at least 8 characters')
+    user.set_password(data.new_password)
+    user.save()
+    AuditLog.log(user, 'user.password_changed')
+    return {'success': True, 'message': 'Password changed successfully'}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Address Book CRUD
+# ─────────────────────────────────────────────────────────────────────────────
+from users.models import UserAddress
+
+class AddressSchema(Schema):
+    id: int
+    label: str
+    full_address: str
+    city: str
+    county: str
+    phone: str
+    is_default: bool
+
+class CreateAddressSchema(Schema):
+    label: str = 'Home'
+    full_address: str
+    city: str
+    county: str = ''
+    phone: str = ''
+    is_default: bool = False
+
+class UpdateAddressSchema(Schema):
+    label: Optional[str] = None
+    full_address: Optional[str] = None
+    city: Optional[str] = None
+    county: Optional[str] = None
+    phone: Optional[str] = None
+    is_default: Optional[bool] = None
+
+@router.get('/addresses', auth=JWTAuth(), response=List[AddressSchema])
+def list_addresses(request):
+    user = request.user
+    return list(UserAddress.objects.filter(user=user))
+
+@router.post('/addresses', auth=JWTAuth(), response=AddressSchema)
+def create_address(request, data: CreateAddressSchema):
+    from ninja.errors import HttpError
+    user = request.user
+    if UserAddress.objects.filter(user=user).count() >= 10:
+        raise HttpError(400, 'You can save up to 10 addresses only')
+    # If this is the first address, make it default automatically
+    if not UserAddress.objects.filter(user=user).exists():
+        data_dict = data.dict()
+        data_dict['is_default'] = True
+    else:
+        data_dict = data.dict()
+    addr = UserAddress.objects.create(user=user, **data_dict)
+    return addr
+
+@router.patch('/addresses/{addr_id}', auth=JWTAuth(), response=AddressSchema)
+def update_address(request, addr_id: int, data: UpdateAddressSchema):
+    from ninja.errors import HttpError
+    user = request.user
+    try:
+        addr = UserAddress.objects.get(id=addr_id, user=user)
+    except UserAddress.DoesNotExist:
+        raise HttpError(404, 'Address not found')
+    for field, value in data.dict(exclude_unset=True).items():
+        setattr(addr, field, value)
+    addr.save()
+    return addr
+
+@router.delete('/addresses/{addr_id}')
+def delete_address(request, addr_id: int):
+    from ninja.errors import HttpError
+    # Manual auth check so we can use JWTAuth
+    from auth_app.auth import JWTAuth as _JWTAuth
+    token = request.COOKIES.get('mve_access_token')
+    if not token:
+        raise HttpError(401, 'Authentication required')
+    auth = _JWTAuth()
+    user = auth.authenticate(request, token)
+    if not user:
+        raise HttpError(401, 'Authentication required')
+    try:
+        addr = UserAddress.objects.get(id=addr_id, user=user)
+    except UserAddress.DoesNotExist:
+        raise HttpError(404, 'Address not found')
+    was_default = addr.is_default
+    addr.delete()
+    # If deleted address was default, promote next most recent
+    if was_default:
+        next_addr = UserAddress.objects.filter(user=user).first()
+        if next_addr:
+            next_addr.is_default = True
+            next_addr.save()
+    return {'success': True}
+
+@router.post('/addresses/{addr_id}/set-default', auth=JWTAuth(), response=AddressSchema)
+def set_default_address(request, addr_id: int):
+    from ninja.errors import HttpError
+    user = request.user
+    try:
+        addr = UserAddress.objects.get(id=addr_id, user=user)
+    except UserAddress.DoesNotExist:
+        raise HttpError(404, 'Address not found')
+    addr.is_default = True
+    addr.save()  # model.save() handles clearing other defaults
+    return addr

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useAuth, apiFetch } from '@/lib/auth'
 import { useCartStore } from '@/lib/cart-store'
 import { 
@@ -20,8 +20,17 @@ import {
   User as UserIcon,
   Phone,
   Mail,
-  Loader2
+  Loader2,
+  Settings,
+  Lock,
+  Home,
+  Building2,
+  Plus,
+  Edit2,
+  Check,
+  X
 } from 'lucide-react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import LoginPromptModal from '@/components/LoginPromptModal'
 
@@ -77,11 +86,12 @@ interface StockAlert {
   notified_at?: string
 }
 
-export default function AccountPage() {
+function AccountContent() {
+  const searchParams = useSearchParams()
   const { user, loading: authLoading } = useAuth()
   const { addItem, localAddItem } = useCartStore()
 
-  const [activeTab, setActiveTab] = useState<'orders' | 'wishlist' | 'alerts'>('orders')
+  const [activeTab, setActiveTab] = useState<'orders' | 'wishlist' | 'alerts' | 'profile' | 'addresses'>('orders')
   const [orders, setOrders] = useState<Order[]>([])
   const [wishlist, setWishlist] = useState<WishlistItem[]>([])
   const [alerts, setAlerts] = useState<StockAlert[]>([])
@@ -112,11 +122,53 @@ export default function AccountPage() {
   const [loadingWishlist, setLoadingWishlist] = useState(false)
   const [loadingAlerts, setLoadingAlerts] = useState(false)
 
+  // Profile state
+  const [profileForm, setProfileForm] = useState({ first_name: '', last_name: '', phone_number: '' })
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [profileMsg, setProfileMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // Password change state
+  const [pwdForm, setPwdForm] = useState({ current_password: '', new_password: '', confirm_password: '' })
+  const [pwdSaving, setPwdSaving] = useState(false)
+  const [pwdMsg, setPwdMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
+  // Addresses state
+  interface UserAddress {
+    id: number
+    label: string
+    full_address: string
+    city: string
+    county: string
+    phone: string
+    is_default: boolean
+  }
+  const [addresses, setAddresses] = useState<UserAddress[]>([])
+  const [loadingAddresses, setLoadingAddresses] = useState(false)
+  const [editingAddress, setEditingAddress] = useState<Partial<UserAddress> | null>(null)
+  const [addrSaving, setAddrSaving] = useState(false)
+  const [addrMsg, setAddrMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+  const [showAddressForm, setShowAddressForm] = useState(false)
+  const [detectingAddrGps, setDetectingAddrGps] = useState(false)
+
+  // Read ?tab= from URL to deep-link
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab && ['orders', 'wishlist', 'alerts', 'profile', 'addresses'].includes(tab)) {
+      setActiveTab(tab as any)
+    }
+  }, [searchParams])
+
   useEffect(() => {
     if (user) {
       fetchOrders()
       fetchWishlist()
       fetchAlerts()
+      fetchAddresses()
+      setProfileForm({
+        first_name: user.first_name || '',
+        last_name: user.last_name || '',
+        phone_number: user.phone_number || '',
+      })
     }
   }, [user])
 
@@ -204,6 +256,152 @@ export default function AccountPage() {
       triggerCartSuccessNotice(`"${item.name}" added to cart & removed from wishlist!`)
     } catch (e) {
       console.error('Failed to add wishlist item to cart', e)
+    }
+  }
+
+  const fetchAddresses = async () => {
+    setLoadingAddresses(true)
+    try {
+      const data = await apiFetch('/api/auth/addresses')
+      setAddresses(Array.isArray(data) ? data : [])
+    } catch (e) {
+      console.error('Failed to fetch addresses', e)
+    } finally {
+      setLoadingAddresses(false)
+    }
+  }
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setProfileSaving(true)
+    setProfileMsg(null)
+    try {
+      await apiFetch('/api/auth/profile', {
+        method: 'PATCH',
+        body: JSON.stringify(profileForm),
+      })
+      setProfileMsg({ type: 'success', text: 'Profile updated successfully!' })
+    } catch (err: any) {
+      setProfileMsg({ type: 'error', text: err.message || 'Failed to update profile' })
+    } finally {
+      setProfileSaving(false)
+    }
+  }
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (pwdForm.new_password !== pwdForm.confirm_password) {
+      setPwdMsg({ type: 'error', text: 'New passwords do not match' })
+      return
+    }
+    if (pwdForm.new_password.length < 8) {
+      setPwdMsg({ type: 'error', text: 'New password must be at least 8 characters' })
+      return
+    }
+    setPwdSaving(true)
+    setPwdMsg(null)
+    try {
+      await apiFetch('/api/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ current_password: pwdForm.current_password, new_password: pwdForm.new_password }),
+      })
+      setPwdMsg({ type: 'success', text: 'Password changed successfully!' })
+      setPwdForm({ current_password: '', new_password: '', confirm_password: '' })
+    } catch (err: any) {
+      setPwdMsg({ type: 'error', text: err.message || 'Failed to change password' })
+    } finally {
+      setPwdSaving(false)
+    }
+  }
+
+  const handleSaveAddress = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingAddress) return
+    setAddrSaving(true)
+    setAddrMsg(null)
+    try {
+      if (editingAddress.id) {
+        await apiFetch(`/api/auth/addresses/${editingAddress.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(editingAddress),
+        })
+        setAddrMsg({ type: 'success', text: 'Address updated!' })
+      } else {
+        await apiFetch('/api/auth/addresses', {
+          method: 'POST',
+          body: JSON.stringify(editingAddress),
+        })
+        setAddrMsg({ type: 'success', text: 'Address added!' })
+      }
+      fetchAddresses()
+      setShowAddressForm(false)
+      setEditingAddress(null)
+    } catch (err: any) {
+      setAddrMsg({ type: 'error', text: err.message || 'Failed to save address' })
+    } finally {
+      setAddrSaving(false)
+    }
+  }
+
+  const handleDetectAddressGps = () => {
+    if (!navigator.geolocation) {
+      setAddrMsg({ type: 'error', text: 'Geolocation is not supported by your browser.' })
+      return
+    }
+    setDetectingAddrGps(true)
+    setAddrMsg(null)
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude
+        const lon = pos.coords.longitude
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`)
+          const data = await res.json()
+          if (data?.address) {
+            const addr = data.address
+            const road = [addr.road, addr.pedestrian, addr.building, addr.neighbourhood].filter(Boolean).join(', ')
+            const city = addr.town || addr.suburb || addr.city_district || addr.city || ''
+            const county = addr.county || addr.state || ''
+            setEditingAddress(prev => ({
+              ...prev,
+              full_address: road || `${lat.toFixed(5)}, ${lon.toFixed(5)}`,
+              city: city,
+              county: county,
+            }))
+            setAddrMsg({ type: 'success', text: `GPS location detected: ${city}${county ? ', ' + county : ''}` })
+          } else {
+            setAddrMsg({ type: 'error', text: 'Could not resolve address. Fill in manually.' })
+          }
+        } catch {
+          setAddrMsg({ type: 'error', text: 'GPS reverse geocoding failed. Fill in manually.' })
+        } finally {
+          setDetectingAddrGps(false)
+        }
+      },
+      () => {
+        setAddrMsg({ type: 'error', text: 'Location access denied. Please allow location access and try again.' })
+        setDetectingAddrGps(false)
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    )
+  }
+
+  const handleDeleteAddress = async (id: number) => {
+    if (!window.confirm('Delete this address?')) return
+    try {
+      await apiFetch(`/api/auth/addresses/${id}`, { method: 'DELETE' })
+      setAddresses(prev => prev.filter(a => a.id !== id))
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete address')
+    }
+  }
+
+  const handleSetDefaultAddress = async (id: number) => {
+    try {
+      await apiFetch(`/api/auth/addresses/${id}/set-default`, { method: 'POST' })
+      setAddresses(prev => prev.map(a => ({ ...a, is_default: a.id === id })))
+    } catch (err: any) {
+      alert(err.message || 'Failed to set default address')
     }
   }
 
@@ -327,9 +525,42 @@ export default function AccountPage() {
         
         {/* Navigation Sidebar Tabs */}
         <div className="lg:col-span-1 flex flex-row lg:flex-col gap-2 overflow-x-auto lg:overflow-x-visible pb-4 lg:pb-0">
+
+          {/* Account Details */}
+          <button
+            onClick={() => { setActiveTab('profile'); setSelectedOrder(null); }}
+            className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl text-sm font-bold transition-all w-full text-left border shrink-0 ${
+              activeTab === 'profile'
+                ? 'bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/20'
+                : 'glass border-border/40 text-muted hover:text-foreground hover:bg-foreground/5'
+            }`}
+          >
+            <Settings size={18} />
+            <span className="whitespace-nowrap">Account Details</span>
+          </button>
+
+          {/* Address Book */}
+          <button
+            onClick={() => { setActiveTab('addresses'); setSelectedOrder(null); }}
+            className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl text-sm font-bold transition-all w-full text-left border shrink-0 ${
+              activeTab === 'addresses'
+                ? 'bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/20'
+                : 'glass border-border/40 text-muted hover:text-foreground hover:bg-foreground/5'
+            }`}
+          >
+            <MapPin size={18} />
+            <span className="whitespace-nowrap">Address Book</span>
+            {addresses.length > 0 && (
+              <span className={`ml-auto px-2 py-0.5 text-xs rounded-full ${
+                activeTab === 'addresses' ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted/10 text-muted'
+              }`}>{addresses.length}</span>
+            )}
+          </button>
+
+          {/* My Orders */}
           <button
             onClick={() => { setActiveTab('orders'); setSelectedOrder(null); }}
-            className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl text-sm font-bold transition-all w-full text-left border ${
+            className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl text-sm font-bold transition-all w-full text-left border shrink-0 ${
               activeTab === 'orders'
                 ? 'bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/20'
                 : 'glass border-border/40 text-muted hover:text-foreground hover:bg-foreground/5'
@@ -344,9 +575,10 @@ export default function AccountPage() {
             )}
           </button>
 
+          {/* Wishlist */}
           <button
             onClick={() => { setActiveTab('wishlist'); setSelectedOrder(null); }}
-            className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl text-sm font-bold transition-all w-full text-left border ${
+            className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl text-sm font-bold transition-all w-full text-left border shrink-0 ${
               activeTab === 'wishlist'
                 ? 'bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/20'
                 : 'glass border-border/40 text-muted hover:text-foreground hover:bg-foreground/5'
@@ -361,9 +593,10 @@ export default function AccountPage() {
             )}
           </button>
 
+          {/* Stock Alerts */}
           <button
             onClick={() => { setActiveTab('alerts'); setSelectedOrder(null); }}
-            className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl text-sm font-bold transition-all w-full text-left border ${
+            className={`flex items-center gap-3 px-5 py-3.5 rounded-2xl text-sm font-bold transition-all w-full text-left border shrink-0 ${
               activeTab === 'alerts'
                 ? 'bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/20'
                 : 'glass border-border/40 text-muted hover:text-foreground hover:bg-foreground/5'
@@ -379,7 +612,330 @@ export default function AccountPage() {
 
         {/* Content Section */}
         <div className="lg:col-span-3">
-          
+
+          {/* ── TAB: Account Details ── */}
+          {activeTab === 'profile' && (
+            <div className="flex flex-col gap-6 animate-fade-in">
+              <h2 className="text-xl font-extrabold flex items-center gap-2">
+                <Settings size={22} className="text-primary" />
+                Account Details
+              </h2>
+
+              {/* ── Profile Edit Card ── */}
+              <div className="glass rounded-3xl border border-border/40 p-6 md:p-8 shadow-sm">
+                <h3 className="text-base font-extrabold text-foreground mb-1 flex items-center gap-2">
+                  <UserIcon size={18} className="text-primary" /> Personal Information
+                </h3>
+                <p className="text-xs text-muted mb-6">Update your name and phone number. Your email and username cannot be changed.</p>
+
+                {/* Read-only Identity Fields */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted block mb-1">Username</label>
+                    <div className="glass rounded-xl px-4 py-2.5 text-sm text-muted border border-border/30 select-all">{user.username}</div>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted block mb-1">Email</label>
+                    <div className="glass rounded-xl px-4 py-2.5 text-sm text-muted border border-border/30 select-all">{user.email}</div>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSaveProfile} className="flex flex-col gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted block mb-1.5">First Name</label>
+                      <input
+                        type="text"
+                        value={profileForm.first_name}
+                        onChange={e => setProfileForm(f => ({ ...f, first_name: e.target.value }))}
+                        className="w-full glass rounded-xl px-4 py-2.5 text-sm text-foreground border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                        placeholder="First name"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted block mb-1.5">Last Name</label>
+                      <input
+                        type="text"
+                        value={profileForm.last_name}
+                        onChange={e => setProfileForm(f => ({ ...f, last_name: e.target.value }))}
+                        className="w-full glass rounded-xl px-4 py-2.5 text-sm text-foreground border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                        placeholder="Last name"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted block mb-1.5">Phone Number</label>
+                    <input
+                      type="tel"
+                      value={profileForm.phone_number}
+                      onChange={e => setProfileForm(f => ({ ...f, phone_number: e.target.value }))}
+                      className="w-full glass rounded-xl px-4 py-2.5 text-sm text-foreground border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                      placeholder="+254 7XX XXX XXX"
+                    />
+                  </div>
+
+                  {profileMsg && (
+                    <div className={`text-xs font-bold px-4 py-3 rounded-xl flex items-center gap-2 ${
+                      profileMsg.type === 'success' ? 'bg-success/10 text-success border border-success/20' : 'bg-danger/10 text-danger border border-danger/20'
+                    }`}>
+                      {profileMsg.type === 'success' ? <Check size={14} /> : <AlertCircle size={14} />}
+                      {profileMsg.text}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end">
+                    <button type="submit" disabled={profileSaving}
+                      className="btn-pill-primary px-8 py-2.5 text-sm flex items-center gap-2 cursor-pointer disabled:opacity-60">
+                      {profileSaving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                      {profileSaving ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+
+              {/* ── Change Password Card ── */}
+              <div className="glass rounded-3xl border border-border/40 p-6 md:p-8 shadow-sm">
+                <h3 className="text-base font-extrabold text-foreground mb-1 flex items-center gap-2">
+                  <Lock size={18} className="text-primary" /> Change Password
+                </h3>
+                <p className="text-xs text-muted mb-6">Choose a strong password of at least 8 characters.</p>
+
+                <form onSubmit={handleChangePassword} className="flex flex-col gap-4">
+                  <div>
+                    <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted block mb-1.5">Current Password</label>
+                    <input
+                      type="password"
+                      value={pwdForm.current_password}
+                      onChange={e => setPwdForm(f => ({ ...f, current_password: e.target.value }))}
+                      required
+                      className="w-full glass rounded-xl px-4 py-2.5 text-sm text-foreground border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                      placeholder="Enter current password"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted block mb-1.5">New Password</label>
+                      <input
+                        type="password"
+                        value={pwdForm.new_password}
+                        onChange={e => setPwdForm(f => ({ ...f, new_password: e.target.value }))}
+                        required minLength={8}
+                        className="w-full glass rounded-xl px-4 py-2.5 text-sm text-foreground border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                        placeholder="At least 8 characters"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted block mb-1.5">Confirm New Password</label>
+                      <input
+                        type="password"
+                        value={pwdForm.confirm_password}
+                        onChange={e => setPwdForm(f => ({ ...f, confirm_password: e.target.value }))}
+                        required
+                        className="w-full glass rounded-xl px-4 py-2.5 text-sm text-foreground border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                        placeholder="Repeat new password"
+                      />
+                    </div>
+                  </div>
+
+                  {pwdMsg && (
+                    <div className={`text-xs font-bold px-4 py-3 rounded-xl flex items-center gap-2 ${
+                      pwdMsg.type === 'success' ? 'bg-success/10 text-success border border-success/20' : 'bg-danger/10 text-danger border border-danger/20'
+                    }`}>
+                      {pwdMsg.type === 'success' ? <Check size={14} /> : <AlertCircle size={14} />}
+                      {pwdMsg.text}
+                    </div>
+                  )}
+
+                  <div className="flex justify-end">
+                    <button type="submit" disabled={pwdSaving}
+                      className="btn-pill-primary px-8 py-2.5 text-sm flex items-center gap-2 cursor-pointer disabled:opacity-60">
+                      {pwdSaving ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
+                      {pwdSaving ? 'Updating...' : 'Update Password'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ── TAB: Address Book ── */}
+          {activeTab === 'addresses' && (
+            <div className="flex flex-col gap-6 animate-fade-in">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-extrabold flex items-center gap-2">
+                  <MapPin size={22} className="text-primary" />
+                  Address Book
+                </h2>
+                {!showAddressForm && (
+                  <button
+                    onClick={() => { setEditingAddress({ label: 'Home', full_address: '', city: '', county: '', phone: '', is_default: false }); setShowAddressForm(true); setAddrMsg(null) }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-white text-xs font-extrabold hover:bg-primary-hover transition-all cursor-pointer shadow-sm"
+                  >
+                    <Plus size={14} /> Add Address
+                  </button>
+                )}
+              </div>
+
+              {/* Address Form (Add / Edit) */}
+              {showAddressForm && editingAddress && (
+                <div className="glass rounded-3xl border border-border/40 p-6 shadow-sm animate-slide-up">
+                  <h3 className="text-sm font-extrabold text-foreground mb-4 flex items-center gap-2">
+                    {editingAddress.id ? <Edit2 size={16} className="text-primary" /> : <Plus size={16} className="text-primary" />}
+                    {editingAddress.id ? 'Edit Address' : 'New Address'}
+                  </h3>
+                  <form onSubmit={handleSaveAddress} className="flex flex-col gap-4">
+                    {/* GPS Auto-detect */}
+                    <button
+                      type="button"
+                      onClick={handleDetectAddressGps}
+                      disabled={detectingAddrGps}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-primary/30 text-primary hover:bg-primary/8 transition-all text-xs font-extrabold cursor-pointer disabled:opacity-60 w-fit"
+                    >
+                      {detectingAddrGps ? (
+                        <><Loader2 size={14} className="animate-spin" /> Detecting GPS...</>
+                      ) : (
+                        <><MapPin size={14} className="text-primary" /> Auto-Detect My Location (GPS)</>
+                      )}
+                    </button>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {['Home', 'Office', 'Other'].map(lbl => (
+                        <button type="button" key={lbl}
+                          onClick={() => setEditingAddress(a => ({ ...a, label: lbl }))}
+                          className={`px-3 py-2 rounded-xl text-xs font-extrabold border transition-all cursor-pointer ${
+                            editingAddress.label === lbl ? 'bg-primary text-white border-primary' : 'glass border-border/40 text-muted hover:text-foreground'
+                          }`}
+                        >
+                          {lbl === 'Home' ? '🏠' : lbl === 'Office' ? '🏢' : '📍'} {lbl}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted block mb-1.5">Full Address / Street</label>
+                      <textarea rows={2}
+                        value={editingAddress.full_address || ''}
+                        onChange={e => setEditingAddress(a => ({ ...a, full_address: e.target.value }))}
+                        required
+                        className="w-full glass rounded-xl px-4 py-2.5 text-sm text-foreground border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all resize-none"
+                        placeholder="e.g. House No. 42, Moi Avenue"
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted block mb-1.5">City / Town</label>
+                        <input type="text"
+                          value={editingAddress.city || ''}
+                          onChange={e => setEditingAddress(a => ({ ...a, city: e.target.value }))}
+                          required
+                          className="w-full glass rounded-xl px-4 py-2.5 text-sm text-foreground border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                          placeholder="e.g. Nairobi"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted block mb-1.5">County (optional)</label>
+                        <input type="text"
+                          value={editingAddress.county || ''}
+                          onChange={e => setEditingAddress(a => ({ ...a, county: e.target.value }))}
+                          className="w-full glass rounded-xl px-4 py-2.5 text-sm text-foreground border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                          placeholder="e.g. Nairobi County"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-extrabold uppercase tracking-wider text-muted block mb-1.5">Phone for Delivery (optional)</label>
+                      <input type="tel"
+                        value={editingAddress.phone || ''}
+                        onChange={e => setEditingAddress(a => ({ ...a, phone: e.target.value }))}
+                        className="w-full glass rounded-xl px-4 py-2.5 text-sm text-foreground border border-border/40 focus:outline-none focus:ring-2 focus:ring-primary/30 transition-all"
+                        placeholder="+254 7XX XXX XXX"
+                      />
+                    </div>
+                    <label className="flex items-center gap-2.5 cursor-pointer w-fit">
+                      <input type="checkbox"
+                        checked={!!editingAddress.is_default}
+                        onChange={e => setEditingAddress(a => ({ ...a, is_default: e.target.checked }))}
+                        className="w-4 h-4 rounded accent-primary"
+                      />
+                      <span className="text-xs font-bold text-foreground">Set as default address</span>
+                    </label>
+
+                    {addrMsg && (
+                      <div className={`text-xs font-bold px-4 py-3 rounded-xl flex items-center gap-2 ${
+                        addrMsg.type === 'success' ? 'bg-success/10 text-success border border-success/20' : 'bg-danger/10 text-danger border border-danger/20'
+                      }`}>
+                        {addrMsg.type === 'success' ? <Check size={14} /> : <AlertCircle size={14} />}
+                        {addrMsg.text}
+                      </div>
+                    )}
+
+                    <div className="flex gap-3 justify-end">
+                      <button type="button"
+                        onClick={() => { setShowAddressForm(false); setEditingAddress(null); setAddrMsg(null) }}
+                        className="px-5 py-2.5 rounded-full text-xs font-extrabold glass border border-border/40 text-muted hover:text-foreground transition-all cursor-pointer">
+                        <X size={13} className="inline mr-1" /> Cancel
+                      </button>
+                      <button type="submit" disabled={addrSaving}
+                        className="btn-pill-primary px-7 py-2.5 text-xs flex items-center gap-2 cursor-pointer disabled:opacity-60">
+                        {addrSaving ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                        {addrSaving ? 'Saving...' : 'Save Address'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* Address List */}
+              {loadingAddresses ? (
+                <div className="flex justify-center p-8"><Loader2 className="w-6 h-6 animate-spin text-primary" /></div>
+              ) : addresses.length === 0 && !showAddressForm ? (
+                <div className="glass border-border/40 rounded-2xl p-10 text-center">
+                  <MapPin size={36} className="text-muted mx-auto mb-3" />
+                  <p className="text-sm text-muted font-medium mb-1">No saved addresses yet</p>
+                  <p className="text-xs text-muted/70">Add an address to speed up checkout.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {addresses.map(addr => (
+                    <div key={addr.id} className={`relative glass rounded-2xl p-5 border transition-all ${
+                      addr.is_default ? 'border-primary/50 shadow-sm shadow-primary/10' : 'border-border/40'
+                    }`}>
+                      {addr.is_default && (
+                        <span className="absolute top-3 right-3 text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-primary/10 text-primary border border-primary/20">
+                          Default
+                        </span>
+                      )}
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-base">{addr.label === 'Home' ? '🏠' : addr.label === 'Office' ? '🏢' : '📍'}</span>
+                        <span className="text-sm font-extrabold text-foreground">{addr.label}</span>
+                      </div>
+                      <p className="text-xs text-muted leading-relaxed">{addr.full_address}</p>
+                      <p className="text-xs text-muted mt-0.5">{addr.city}{addr.county ? `, ${addr.county}` : ''}</p>
+                      {addr.phone && <p className="text-xs text-muted mt-0.5 flex items-center gap-1"><Phone size={11} /> {addr.phone}</p>}
+
+                      <div className="flex items-center gap-2 mt-4 flex-wrap">
+                        {!addr.is_default && (
+                          <button onClick={() => handleSetDefaultAddress(addr.id)}
+                            className="text-[11px] font-extrabold px-3 py-1.5 rounded-full glass border border-border/40 text-muted hover:text-primary hover:border-primary/40 transition-all cursor-pointer">
+                            <Check size={11} className="inline mr-1" /> Set Default
+                          </button>
+                        )}
+                        <button onClick={() => { setEditingAddress({ ...addr }); setShowAddressForm(true); setAddrMsg(null) }}
+                          className="text-[11px] font-extrabold px-3 py-1.5 rounded-full glass border border-border/40 text-muted hover:text-foreground transition-all cursor-pointer">
+                          <Edit2 size={11} className="inline mr-1" /> Edit
+                        </button>
+                        <button onClick={() => handleDeleteAddress(addr.id)}
+                          className="text-[11px] font-extrabold px-3 py-1.5 rounded-full text-danger hover:bg-danger/10 border border-transparent hover:border-danger/20 transition-all cursor-pointer">
+                          <Trash2 size={11} className="inline mr-1" /> Delete
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* TAB: Orders */}
           {activeTab === 'orders' && (
             <div className="flex flex-col gap-6">
@@ -785,5 +1341,13 @@ export default function AccountPage() {
       )}
 
     </div>
+  )
+}
+
+export default function AccountPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[50vh]"><div className="w-7 h-7 rounded-full border-2 border-primary border-t-transparent animate-spin" /></div>}>
+      <AccountContent />
+    </Suspense>
   )
 }

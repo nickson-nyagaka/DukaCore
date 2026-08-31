@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Phone, MapPin, CreditCard, Smartphone, Loader2, CheckCircle, XCircle, Navigation, Store, Home, Compass } from 'lucide-react'
+import { Phone, MapPin, CreditCard, Smartphone, Loader2, CheckCircle, XCircle, Navigation, Store, Home, Compass, Edit2, CheckCircle2 } from 'lucide-react'
 import { useCartStore } from '@/lib/cart-store'
 import { useAuth, apiFetch } from '@/lib/auth'
 import { validateKenyanPhone } from '@/lib/validation'
@@ -31,6 +31,12 @@ export default function CheckoutPage() {
   const [detectingGps, setDetectingGps] = useState(false)
   const [gpsCoordinates, setGpsCoordinates] = useState<{ lat: number; lon: number } | null>(null)
   const [gpsAddressTag, setGpsAddressTag] = useState('')
+
+  // Saved address state — pre-fill from user's default address
+  const [savedAddress, setSavedAddress] = useState<{
+    label: string; full_address: string; city: string; county: string; phone: string
+  } | null>(null)
+  const [usingSavedAddress, setUsingSavedAddress] = useState(false)
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('MOCK')
   const [status, setStatus] = useState<CheckoutStatus>('form')
@@ -76,6 +82,41 @@ export default function CheckoutPage() {
       if (pollRef.current) clearInterval(pollRef.current)
     }
   }, [])
+
+  // Fetch user's default saved address and pre-fill checkout fields
+  useEffect(() => {
+    if (!user) return
+    apiFetch('/api/auth/addresses')
+      .then((data: any[]) => {
+        const defaultAddr = data.find(a => a.is_default) || data[0] || null
+        if (defaultAddr) {
+          setSavedAddress(defaultAddr)
+          setUsingSavedAddress(true)
+          // Pre-fill county and town if possible
+          const matchedCounty = KENYAN_COUNTIES.find(c =>
+            defaultAddr.county?.toLowerCase().includes(c.name.toLowerCase()) ||
+            c.name.toLowerCase().includes(defaultAddr.county?.toLowerCase() || '')
+          )
+          if (matchedCounty) {
+            setSelectedCounty(matchedCounty.name)
+            const matchedTown = matchedCounty.towns.find((t: string) =>
+              defaultAddr.city?.toLowerCase().includes(t.toLowerCase()) ||
+              t.toLowerCase().includes(defaultAddr.city?.toLowerCase() || '')
+            )
+            if (matchedTown) setSelectedTown(matchedTown)
+          }
+          // Pre-fill street landmark with saved full address
+          if (defaultAddr.full_address) {
+            setStreetLandmark(defaultAddr.full_address)
+          }
+          // Pre-fill phone if user has one in the address
+          if (defaultAddr.phone && !phone) {
+            setPhone(defaultAddr.phone)
+          }
+        }
+      })
+      .catch(() => {})
+  }, [user])
 
   // Geolocation API Handler (Jumia Style GPS Detection)
   const handleDetectLocation = () => {
@@ -375,6 +416,36 @@ export default function CheckoutPage() {
                 )}
               </button>
             </div>
+
+            {/* Saved Address Pre-fill Banner */}
+            {savedAddress && usingSavedAddress && (
+              <div className="bg-primary/8 border border-primary/25 rounded-2xl p-4 flex items-start justify-between gap-4 animate-fade-in">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="p-2 rounded-xl bg-primary/15 text-primary shrink-0 mt-0.5">
+                    <CheckCircle2 size={16} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-extrabold text-foreground mb-0.5 flex items-center gap-1.5">
+                      <span>{savedAddress.label === 'Home' ? '🏠' : savedAddress.label === 'Office' ? '🏢' : '📍'}</span>
+                      Using your saved address — {savedAddress.label}
+                    </p>
+                    <p className="text-[11px] text-muted leading-relaxed truncate">{savedAddress.full_address}</p>
+                    <p className="text-[11px] text-muted">{savedAddress.city}{savedAddress.county ? `, ${savedAddress.county}` : ''}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUsingSavedAddress(false)
+                    setStreetLandmark('')
+                    setSavedAddress(null)
+                  }}
+                  className="flex items-center gap-1.5 text-[11px] font-extrabold text-primary hover:text-primary-hover px-3 py-1.5 rounded-xl border border-primary/25 hover:bg-primary/10 transition-all shrink-0 cursor-pointer"
+                >
+                  <Edit2 size={12} /> Edit Address
+                </button>
+              </div>
+            )}
 
             {/* GPS Verified Badge */}
             {gpsAddressTag && (

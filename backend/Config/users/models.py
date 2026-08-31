@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
@@ -68,3 +68,26 @@ class TeamInvite(models.Model):
     expires_at = models.DateTimeField()
     accepted_at = models.DateTimeField(null=True, blank=True)
 
+
+class UserAddress(models.Model):
+    """Saved delivery addresses for a customer."""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='addresses')
+    label = models.CharField(max_length=50, default='Home')   # e.g. "Home", "Office"
+    full_address = models.TextField()
+    city = models.CharField(max_length=100)
+    county = models.CharField(max_length=100, blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    is_default = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-is_default', '-created_at']
+
+    def save(self, *args, **kwargs):
+        # Ensure only one default address per user
+        if self.is_default:
+            UserAddress.objects.filter(user=self.user, is_default=True).exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.label} — {self.user.email}"
