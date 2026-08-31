@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { apiFetch } from '@/lib/auth'
-import { Plus, Edit2, Trash2, X, Image as ImageIcon, AlertTriangle, Search, ArrowUpDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Plus, Edit2, Trash2, X, Image as ImageIcon, AlertTriangle, Search, ArrowUpDown, ChevronLeft, ChevronRight, Eye, EyeOff, Loader2 } from 'lucide-react'
 import ModalAlert from '@/components/admin/ModalAlert'
 import RichTextEditor from '@/components/RichTextEditor'
 
@@ -45,33 +45,44 @@ export default function AdminProducts() {
   const [editLinkAddresses, setEditLinkAddresses] = useState<string[]>([])
   const [submittingEdit, setSubmittingEdit] = useState(false)
   const [editAttributes, setEditAttributes] = useState<{name: string, type: string, value: string}[]>([])
+  const [togglingIds, setTogglingIds] = useState<number[]>([])
 
-  // Quick toggle active status directly from table row
+  // Instant real-time toggle active status directly from table row with optimistic update
   const handleToggleActive = async (product: any) => {
+    const prevStatus = Boolean(product.is_active)
+    const updatedStatus = !prevStatus
+
+    // 1. Instant 0ms optimistic update
+    setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_active: updatedStatus } : p))
+    setTogglingIds(prev => [...prev, product.id])
+
     try {
-      const updatedStatus = !product.is_active
       await apiFetch(`/api/admin/products/${product.id}`, {
         method: 'PATCH',
         body: JSON.stringify({ is_active: updatedStatus })
       })
       setToast({
-        message: `Product "${product.name}" is now ${updatedStatus ? 'Active' : 'Inactive'}`,
+        message: `Product "${product.name}" is now ${updatedStatus ? 'Active' : 'Deactivated'}`,
         type: 'success'
       })
-      fetchProducts()
-      setTimeout(() => setToast(null), 4000)
+      setTimeout(() => setToast(null), 3000)
     } catch (err: any) {
+      // Revert optimistic update on failure
+      setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_active: prevStatus } : p))
       setToast({ message: err.message || 'Failed to update product status', type: 'error' })
+    } finally {
+      setTogglingIds(prev => prev.filter(id => id !== product.id))
     }
   }
 
   // Delete Modal State
   const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [productToDelete, setProductToDelete] = useState<number | null>(null)
+  const [productToDelete, setProductToDelete] = useState<any | null>(null)
   const [submittingDelete, setSubmittingDelete] = useState(false)
 
   // Datatable States
   const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'deactivated'>('all')
   const [sortField, setSortField] = useState('name')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc')
   const [currentPage, setCurrentPage] = useState(1)
@@ -84,7 +95,14 @@ export default function AdminProducts() {
     const descMatch = p.description?.toLowerCase().includes(search)
     const cat = categories.find(c => c.id === p.category_id)
     const catMatch = cat ? cat.name?.toLowerCase().includes(search) : false
-    return nameMatch || descMatch || catMatch
+    const matchesSearch = nameMatch || descMatch || catMatch
+
+    const matchesStatus = 
+      statusFilter === 'all' ? true :
+      statusFilter === 'active' ? Boolean(p.is_active) :
+      !p.is_active
+
+    return matchesSearch && matchesStatus
   })
 
   // Sort products
@@ -125,7 +143,7 @@ export default function AdminProducts() {
   }
 
   useEffect(() => {
-    fetchProducts()
+    fetchProducts(true)
     fetchCategories()
   }, [])
 
@@ -138,17 +156,15 @@ export default function AdminProducts() {
     }
   }
 
-
-
-  const fetchProducts = async () => {
-    setLoading(true)
+  const fetchProducts = async (showLoading = false) => {
+    if (showLoading) setLoading(true)
     try {
       const data = await apiFetch('/api/admin/products')
       setProducts(data)
     } catch (e) {
       console.error(e)
     } finally {
-      setLoading(false)
+      if (showLoading) setLoading(false)
     }
   }
 
@@ -203,7 +219,7 @@ export default function AdminProducts() {
       urls.push(...activeLinks)
 
       // 3. Update product
-      await apiFetch(`/api/admin/products/${selectedProductId}`, {
+      const updatedProduct = await apiFetch(`/api/admin/products/${selectedProductId}`, {
         method: 'PATCH',
         body: JSON.stringify({
           name: editForm.name,
@@ -219,14 +235,16 @@ export default function AdminProducts() {
         })
       })
 
+      // Instant local state update
+      setProducts(prev => prev.map(p => p.id === selectedProductId ? { ...p, ...updatedProduct } : p))
       setToast({ message: 'Product updated successfully!', type: 'success' })
       setShowEditModal(false)
       setSelectedProductId(null)
       setModalAlert(null)
-      fetchProducts()
+      fetchProducts(false)
       setTimeout(() => {
         setToast(null)
-      }, 10000)
+      }, 4000)
     } catch (err: any) {
       setModalAlert({ message: err.message || 'Failed to update product', type: 'error' })
     } finally {
@@ -234,29 +252,32 @@ export default function AdminProducts() {
     }
   }
 
-  const handleDeleteClick = (id: number) => {
+  const handleDeleteClick = (product: any) => {
     setModalAlert(null)
-    setProductToDelete(id)
+    setProductToDelete(product)
     setShowDeleteModal(true)
   }
 
   const handleDeleteConfirm = async () => {
     if (!productToDelete) return
+    const prod = productToDelete
     setSubmittingDelete(true)
     setModalAlert(null)
+    
+    // Instant local removal
+    setProducts(prev => prev.filter(p => p.id !== prod.id))
+    setShowDeleteModal(false)
+    setProductToDelete(null)
+
     try {
-      await apiFetch(`/api/admin/products/${productToDelete}`, { method: 'DELETE' })
-      setToast({ message: 'Product deleted successfully!', type: 'success' })
-      setShowDeleteModal(false)
-      setProductToDelete(null)
-      fetchProducts()
+      await apiFetch(`/api/admin/products/${prod.id}`, { method: 'DELETE' })
+      setToast({ message: `Product "${prod.name}" deleted permanently.`, type: 'success' })
       setTimeout(() => {
         setToast(null)
-      }, 10000)
+      }, 4000)
     } catch (err: any) {
+      fetchProducts(false)
       setToast({ message: err.message || 'Failed to delete product', type: 'error' })
-      setShowDeleteModal(false)
-      setProductToDelete(null)
     } finally {
       setSubmittingDelete(false)
     }
@@ -341,23 +362,60 @@ export default function AdminProducts() {
         </button>
       </div>
       {/* Search and Filters Bar */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center bg-surface/20 p-4 rounded-xl border border-border/40 backdrop-blur-sm">
-        <div className="relative w-full sm:max-w-xs">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-muted">
-            <Search size={16} />
-          </span>
-          <input
-            type="text"
-            placeholder="Search products..."
-            className="input-glass pl-9 pr-4 py-2 w-full text-sm"
-            value={searchTerm}
-            onChange={e => {
-              setSearchTerm(e.target.value)
-              setCurrentPage(1)
-            }}
-          />
+      <div className="flex flex-col md:flex-row gap-4 justify-between items-center bg-surface/20 p-4 rounded-xl border border-border/40 backdrop-blur-sm">
+        <div className="flex flex-col sm:flex-row gap-3 items-center w-full md:w-auto">
+          <div className="relative w-full sm:max-w-xs">
+            <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-muted">
+              <Search size={16} />
+            </span>
+            <input
+              type="text"
+              placeholder="Search products..."
+              className="input-glass pl-9 pr-4 py-2 w-full text-sm"
+              value={searchTerm}
+              onChange={e => {
+                setSearchTerm(e.target.value)
+                setCurrentPage(1)
+              }}
+            />
+          </div>
+
+          {/* Status Filter Tabs */}
+          <div className="flex items-center bg-surface/80 border border-border/60 rounded-xl p-1 text-xs w-full sm:w-auto">
+            <button
+              onClick={() => { setStatusFilter('all'); setCurrentPage(1); }}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
+                statusFilter === 'all'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-muted hover:text-foreground'
+              }`}
+            >
+              All ({products.length})
+            </button>
+            <button
+              onClick={() => { setStatusFilter('active'); setCurrentPage(1); }}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
+                statusFilter === 'active'
+                  ? 'bg-emerald-500 text-white shadow-sm'
+                  : 'text-muted hover:text-foreground'
+              }`}
+            >
+              Active ({products.filter(p => p.is_active).length})
+            </button>
+            <button
+              onClick={() => { setStatusFilter('deactivated'); setCurrentPage(1); }}
+              className={`px-3 py-1.5 rounded-lg font-medium transition-all cursor-pointer ${
+                statusFilter === 'deactivated'
+                  ? 'bg-amber-500 text-white shadow-sm'
+                  : 'text-muted hover:text-foreground'
+              }`}
+            >
+              Deactivated ({products.filter(p => !p.is_active).length})
+            </button>
+          </div>
         </div>
-        <div className="flex gap-2 items-center text-xs text-muted w-full sm:w-auto justify-end">
+
+        <div className="flex gap-2 items-center text-xs text-muted w-full md:w-auto justify-end">
           <span>Show</span>
           <select
             className="bg-surface border border-border rounded px-2 py-1 focus:outline-none focus:border-primary/45 cursor-pointer text-foreground"
@@ -416,24 +474,65 @@ export default function AdminProducts() {
                 <td className="p-4">
                   <button
                     onClick={() => handleToggleActive(p)}
-                    title={`Click to set ${p.is_active ? 'Inactive' : 'Active'}`}
-                    className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
+                    disabled={togglingIds.includes(p.id)}
+                    title={`Click to ${p.is_active ? 'deactivate' : 'activate'} this product`}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-all duration-200 cursor-pointer border flex items-center gap-1.5 active:scale-95 disabled:opacity-60 ${
                       p.is_active 
-                        ? 'bg-green-500/10 text-green-500 border-green-500/20 hover:bg-green-500/20' 
-                        : 'bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/20'
+                        ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20 shadow-sm shadow-emerald-500/10' 
+                        : 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500/20 shadow-sm shadow-amber-500/10'
                     }`}
                   >
-                    <span className={`w-2 h-2 rounded-full ${p.is_active ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                    {p.is_active ? 'Active' : 'Inactive'}
+                    {togglingIds.includes(p.id) ? (
+                      <Loader2 size={10} className="animate-spin text-foreground" />
+                    ) : (
+                      <span className={`w-2 h-2 rounded-full transition-colors duration-200 ${p.is_active ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                    )}
+                    <span>{p.is_active ? 'Active' : 'Deactivated'}</span>
                   </button>
                 </td>
                 <td className="p-4 text-right">
-                  <button onClick={() => handleEditClick(p)} className="p-2 text-muted hover:text-primary transition-colors cursor-pointer">
-                    <Edit2 size={16} />
-                  </button>
-                  <button onClick={() => handleDeleteClick(p.id)} className="p-2 text-muted hover:text-red-500 transition-colors cursor-pointer">
-                    <Trash2 size={16} />
-                  </button>
+                  <div className="flex items-center justify-end gap-1">
+                    {/* Option 1: Edit */}
+                    <button 
+                      onClick={() => handleEditClick(p)} 
+                      title="Edit Product"
+                      aria-label="Edit Product"
+                      className="p-2 text-muted hover:text-primary hover:bg-primary/10 rounded-lg transition-all active:scale-90 cursor-pointer"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+
+                    {/* Option 2: Deactivate / Activate */}
+                    <button 
+                      onClick={() => handleToggleActive(p)} 
+                      disabled={togglingIds.includes(p.id)}
+                      title={p.is_active ? "Deactivate Product (Hide from store)" : "Activate Product (Show in store)"}
+                      aria-label={p.is_active ? "Deactivate Product" : "Activate Product"}
+                      className={`p-2 rounded-lg transition-all duration-150 active:scale-90 cursor-pointer disabled:opacity-50 ${
+                        p.is_active 
+                          ? 'text-muted hover:text-amber-500 hover:bg-amber-500/10' 
+                          : 'text-muted hover:text-emerald-500 hover:bg-emerald-500/10'
+                      }`}
+                    >
+                      {togglingIds.includes(p.id) ? (
+                        <Loader2 size={16} className="animate-spin text-primary" />
+                      ) : p.is_active ? (
+                        <EyeOff size={16} />
+                      ) : (
+                        <Eye size={16} />
+                      )}
+                    </button>
+
+                    {/* Option 3: Delete Permanently */}
+                    <button 
+                      onClick={() => handleDeleteClick(p)} 
+                      title="Delete Product Permanently"
+                      aria-label="Delete Product Permanently"
+                      className="p-2 text-muted hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all active:scale-90 cursor-pointer"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -1001,24 +1100,29 @@ export default function AdminProducts() {
       )}
 
       {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-fade-in">
           <div className="glass w-full max-w-md rounded-2xl p-6 relative border border-border shadow-2xl">
             <button 
-              onClick={() => setShowDeleteModal(false)}
+              onClick={() => { setShowDeleteModal(false); setProductToDelete(null); }}
               className="absolute top-4 right-4 text-muted hover:text-foreground transition-colors cursor-pointer"
             >
               <X size={20} />
             </button>
             <h3 className="font-bold text-xl mb-3 font-heading text-red-500 flex items-center gap-2">
-              <AlertTriangle size={24} /> Delete Product
+              <AlertTriangle size={24} /> Delete Product Permanently
             </h3>
-            <p className="text-sm text-muted mb-6">Are you sure you want to delete this product? This action cannot be undone and will hide the product from the marketplace.</p>
+            <p className="text-sm text-muted mb-3">
+              Are you sure you want to permanently delete <span className="font-semibold text-foreground">"{productToDelete?.name}"</span>?
+            </p>
+            <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-400 mb-6">
+              ⚠️ This will completely remove the product, images, and price tiers from the storefront and database. This action cannot be undone. (If you only want to temporarily hide it, use <strong>Deactivate</strong> instead).
+            </div>
             
             <div className="flex gap-3">
               <button 
                 type="button" 
-                onClick={() => setShowDeleteModal(false)} 
-                className="btn-secondary flex-1 justify-center"
+                onClick={() => { setShowDeleteModal(false); setProductToDelete(null); }} 
+                className="btn-secondary flex-1 justify-center cursor-pointer"
               >
                 Cancel
               </button>
@@ -1026,9 +1130,9 @@ export default function AdminProducts() {
                 type="button" 
                 onClick={handleDeleteConfirm}
                 disabled={submittingDelete}
-                className="btn-danger flex-1 justify-center"
+                className="btn-danger flex-1 justify-center cursor-pointer bg-red-600 hover:bg-red-700 text-white font-medium"
               >
-                {submittingDelete ? 'Deleting...' : 'Delete'}
+                {submittingDelete ? 'Deleting...' : 'Delete Permanently'}
               </button>
             </div>
           </div>

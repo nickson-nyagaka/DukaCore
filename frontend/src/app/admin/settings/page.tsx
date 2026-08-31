@@ -41,9 +41,9 @@ export default function AdminSettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   
   // Store Config State
-  const [storeName, setStoreName] = useState('DukaCore Store')
-  const [supportEmail, setSupportEmail] = useState('support@dukacore.com')
-  const [supportPhone, setSupportPhone] = useState('+254 700 000 000')
+  const [storeName, setStoreName] = useState('Mavine Households')
+  const [supportEmail, setSupportEmail] = useState('support@mavinehouseholds.co.ke')
+  const [supportPhone, setSupportPhone] = useState('+254 715 454 643')
   const [currency, setCurrency] = useState('KES')
   const [shippingFee, setShippingFee] = useState('250')
 
@@ -61,7 +61,7 @@ export default function AdminSettingsPage() {
     }
 
     // Load store preferences from localStorage if present
-    const savedStore = localStorage.getItem('dukacore_admin_store_settings')
+    const savedStore = localStorage.getItem('mavine_admin_store_settings')
     if (savedStore) {
       try {
         const parsed = JSON.parse(savedStore)
@@ -154,7 +154,7 @@ export default function AdminSettingsPage() {
       shippingFee
     }
 
-    localStorage.setItem('dukacore_admin_store_settings', JSON.stringify(storeData))
+    localStorage.setItem('mavine_admin_store_settings', JSON.stringify(storeData))
     setSavingStore(true)
     setTimeout(() => {
       setSavingStore(false)
@@ -502,7 +502,7 @@ export default function AdminSettingsPage() {
                 <h4 className="text-sm font-bold text-foreground">M-Pesa Webhook Callback URL</h4>
                 <div className="flex items-center gap-3 p-3 rounded-xl bg-background border border-border text-xs font-mono text-muted overflow-x-auto">
                   <ExternalLink size={14} className="shrink-0 text-primary" />
-                  <span>http://dukacore-callback-dev.loca.lt/api/orders/payment/callback</span>
+                  <span>http://mavine-callback-dev.loca.lt/api/orders/payment/callback</span>
                 </div>
                 <p className="text-xs text-muted">
                   Callbacks use row-level database locking (<code className="text-[11px] bg-foreground/5 px-1.5 py-0.5 rounded">select_for_update()</code>) to guarantee idempotency and auto-restore stock on payment cancellations.

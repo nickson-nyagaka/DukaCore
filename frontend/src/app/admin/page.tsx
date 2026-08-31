@@ -95,14 +95,14 @@ export default function AdminDashboard() {
           label="Avg Order Value"
           value={`KES ${(metrics?.average_order_value ?? 0).toLocaleString()}`}
           sub="Rolling 30 days"
-          color="#3B82F6"
+          color="var(--color-mv-blue-500, #3871e0)"
         />
         <KPICard
           icon={<Users size={22} />}
           label="Conversion Rate"
           value={`${metrics?.conversion_rate ?? 0}%`}
           sub="Rolling 30 days"
-          color="#8B5CF6"
+          color="var(--color-mv-teal-600, #0d90bc)"
         />
       </div>
 

@@ -57,7 +57,7 @@ export default function ProductActions({ product }: { product: any }) {
 
   const handleStockAlert = async () => {
     if (!user) {
-      alert('Please sign in to set stock alerts.')
+      setShowLoginPrompt(true)
       return
     }
     setNotifying(true)
@@ -65,29 +65,36 @@ export default function ProductActions({ product }: { product: any }) {
       await apiFetch(`/api/catalog/products/${product.id}/stock-alert`, {
         method: 'POST'
       })
-      setToast('🔔 Alert created! We will notify you in your dashboard when stock is back.')
+      setToast('🔔 Alert created! We will notify you in your Account Dashboard when back in stock.')
       setTimeout(() => setToast(''), 4000)
     } catch {
-      alert('Failed to create alert')
+      setToast('Failed to create alert — please try again')
+      setTimeout(() => setToast(''), 3000)
     } finally {
       setNotifying(false)
     }
   }
 
+  const isUnavailable = product.is_active === false || product.stock_quantity === 0
+
   return (
     <>
-      {product.stock_quantity === 0 ? (
+      {isUnavailable ? (
         <div className="flex flex-col gap-4">
-          <div className="bg-danger/5 border border-danger/10 text-danger rounded-2xl p-4 flex items-center gap-3 text-sm">
-            <AlertCircle size={18} className="shrink-0" />
-            <span>This product is currently out of stock. You can set an alert to be notified when it returns.</span>
+          <div className="bg-amber-500/10 border border-amber-500/25 text-amber-600 dark:text-amber-400 rounded-2xl p-4 flex items-center gap-3 text-sm">
+            <AlertCircle size={18} className="shrink-0 text-amber-500" />
+            <span>
+              {product.is_active === false
+                ? 'This product is currently deactivated / awaiting restock. Set an alert to be notified in your account when it returns.'
+                : 'This product is currently out of stock. You can set an alert to be notified when it returns.'}
+            </span>
           </div>
           
           <div className="flex gap-4">
             <button
               onClick={handleStockAlert}
               disabled={notifying}
-              className="btn-pill-primary flex-1 py-3 text-sm flex items-center justify-center gap-2"
+              className="btn-pill-primary flex-1 py-3 text-sm flex items-center justify-center gap-2 cursor-pointer"
             >
               <Bell size={16} />
               {notifying ? 'Setting alert...' : 'Notify Me When Back in Stock'}
@@ -96,7 +103,7 @@ export default function ProductActions({ product }: { product: any }) {
             <button
               onClick={handleToggleWishlist}
               disabled={wishlistLoading}
-              className={`p-3 rounded-full border transition-all flex items-center justify-center shrink-0 ${
+              className={`p-3 rounded-full border transition-all flex items-center justify-center shrink-0 cursor-pointer ${
                 wishlisted 
                   ? 'bg-danger/10 border-danger/20 text-danger' 
                   : 'glass border-border/40 text-muted hover:text-foreground'

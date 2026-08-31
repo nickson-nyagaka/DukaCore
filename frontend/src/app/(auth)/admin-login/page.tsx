@@ -35,9 +35,9 @@ export default function AdminLoginPage() {
         {/* Logo */}
         <div className="text-center mb-6">
           <div className="text-2xl font-black tracking-tight" style={{ fontFamily: 'var(--font-heading)' }}>
-            <span className="text-primary">Duka</span><span className="text-accent">Core</span>
+            <span className="text-primary">Mavine</span> <span className="text-accent">Households</span>
           </div>
-          <p className="text-xs text-muted mt-1 font-medium">Your Marketplace Platform</p>
+          <p className="text-xs text-muted mt-1 font-medium">Store Operations & Back-Office</p>
         </div>
 
         <h1 className="text-xl font-bold text-center text-foreground mb-1" style={{ fontFamily: 'var(--font-heading)' }}>

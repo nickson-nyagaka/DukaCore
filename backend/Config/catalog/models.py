@@ -12,6 +12,47 @@ class Category(models.Model):
     def __str__(self):
         return self.name
 
+class CategoryAttributeSchema(models.Model):
+    category = models.OneToOneField(Category, on_delete=models.CASCADE, related_name='attribute_schema')
+    schema = models.JSONField(default=dict, help_text="Mapping of attribute keys to rules: e.g. {'material': {'type': 'string', 'required': false}}")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Attribute Schema for {self.category.name}"
+
+    def validate_attributes(self, attributes):
+        """
+        Validates product attributes against this category's schema.
+        Accepts dict {'key': 'val'} or list of dicts [{'name': '...', 'value': '...'}]
+        """
+        if not self.schema:
+            return True, []
+        allowed_keys = set(self.schema.keys())
+        errors = []
+        attr_dict = {}
+
+        if isinstance(attributes, dict):
+            attr_dict = attributes
+        elif isinstance(attributes, list):
+            for item in attributes:
+                if isinstance(item, dict):
+                    k = item.get('key') or item.get('name')
+                    v = item.get('value')
+                    if k:
+                        attr_dict[str(k).strip()] = v
+
+        for k in attr_dict.keys():
+            if k not in allowed_keys:
+                errors.append(f"Attribute '{k}' is not allowed in category '{self.category.name}'. Allowed keys: {', '.join(sorted(allowed_keys))}")
+
+        for k, spec in self.schema.items():
+            if isinstance(spec, dict) and spec.get('required'):
+                if k not in attr_dict or attr_dict[k] in (None, ""):
+                    errors.append(f"Required attribute '{k}' is missing.")
+
+        return (len(errors) == 0), errors
+
 class Product(models.Model):
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='products')
     name = models.CharField(max_length=255)
@@ -20,6 +61,7 @@ class Product(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
     stock_quantity = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
+    is_heavy_item = models.BooleanField(default=False, help_text="Flag for bulky/heavy goods requiring special freight/surcharge")
     attributes = models.JSONField(default=list, blank=True)
     discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     flash_sale_end_date = models.DateTimeField(null=True, blank=True)
@@ -29,8 +71,29 @@ class Product(models.Model):
     def __str__(self):
         return self.name
 
+    def clean(self):
+        super().clean()
+        if self.category and hasattr(self.category, 'attribute_schema') and self.attributes:
+            is_valid, errors = self.category.attribute_schema.validate_attributes(self.attributes)
+            if not is_valid:
+                raise ValidationError({"attributes": errors})
+
     def save(self, *args, **kwargs):
+        self.clean()
         super().save(*args, **kwargs)
+
+class PriceTier(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='price_tiers')
+    min_quantity = models.PositiveIntegerField(help_text="Minimum quantity to activate this bulk unit price")
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Discounted price per unit for this volume tier")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['min_quantity']
+        unique_together = [['product', 'min_quantity']]
+
+    def __str__(self):
+        return f"{self.product.name} ({self.min_quantity}+ @ KES {self.unit_price})"
 
 class ProductImage(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='images')

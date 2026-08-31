@@ -148,7 +148,7 @@ def update_product(request, product_id: int, data: ProductUpdateSchema):
 
     product.save()
     
-    if product.stock_quantity > 0:
+    if product.is_active and product.stock_quantity > 0:
         from django.utils import timezone
         from .models import StockAlert
         active_alerts = StockAlert.objects.filter(product=product, is_active=True)
@@ -189,11 +189,10 @@ def delete_product(request, product_id: int):
     if request.user.role not in ['ADMIN', 'STAFF']:
         raise HttpError(403, "Forbidden")
         
-    # Soft delete
     product = get_object_or_404(Product, id=product_id)
-    product.is_active = False
-    product.save()
-    AuditLog.log(request.user, "product.delete", {"product_id": product_id, "name": product.name})
+    product_name = product.name
+    product.delete()
+    AuditLog.log(request.user, "product.delete", {"product_id": product_id, "name": product_name})
     return {"success": True}
 
 # --- Vouchers ---

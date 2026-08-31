@@ -55,9 +55,9 @@ export default function Navbar() {
       <nav className="sticky top-0 z-50 glass-surface">
         <div className="max-w-[var(--max-w-page)] mx-auto px-4 h-16 flex items-center gap-4">
           {/* Logo */}
-          <Link href="/" prefetch={true} className="flex items-center gap-1 text-2xl font-black tracking-tight shrink-0" style={{ fontFamily: 'var(--font-heading)' }}>
-            <span className="text-primary">Duka</span>
-            <span className="text-accent">Core</span>
+          <Link href="/" prefetch={true} className="flex items-center gap-1.5 text-2xl font-black tracking-tight shrink-0" style={{ fontFamily: 'var(--font-heading)' }}>
+            <span className="text-primary">Mavine</span>
+            <span className="text-accent">Households</span>
           </Link>
 
           {/* Search */}
@@ -65,7 +65,7 @@ export default function Navbar() {
             <div className="flex w-full rounded-full overflow-hidden border border-border bg-card focus-within:ring-2 focus-within:ring-primary/30 shadow-sm transition-all">
               <input
                 type="text"
-                placeholder="Search products, brands, categories..."
+                placeholder="Search kitchenware, bedding, appliances, furniture..."
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 className="flex-1 px-4 py-2.5 text-sm bg-transparent outline-none text-foreground placeholder:text-muted font-medium"

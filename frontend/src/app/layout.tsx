@@ -18,11 +18,11 @@ const cantarell = Cantarell({
 });
 
 export const metadata: Metadata = {
-  title: "DukaCore E-Commerce Platform",
+  title: "Mavine Households | Quality Home Essentials",
   description:
-    "Launch your online store in seconds.E-commerce with M-Pesa Integration",
+    "Quality kitchenware, home appliances, bedding, carpets, storage, travel bags, bicycles & furniture. Secure Lipa Na M-Pesa payments.",
   keywords:
-    "e-commerce, online store, M-Pesa, Kenya",
+    "Mavine Households, household goods, kitchenware, appliances, bedding, furniture, bicycles, Kenya, M-Pesa",
 };
 
 export default function RootLayout({

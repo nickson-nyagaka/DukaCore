@@ -5,10 +5,10 @@ import { apiFetch } from './auth'
 // Generate a guest session UUID for unauthenticated cart tracking
 function getOrCreateSessionId(): string {
   if (typeof window === 'undefined') return ''
-  let sid = localStorage.getItem('dukacore_session_id')
+  let sid = localStorage.getItem('mavine_session_id')
   if (!sid) {
     sid = crypto.randomUUID()
-    localStorage.setItem('dukacore_session_id', sid)
+    localStorage.setItem('mavine_session_id', sid)
   }
   return sid
 }
@@ -126,6 +126,6 @@ export const useCartStore = create<CartState>()(
         set({ items: [], total: 0, itemCount: 0 })
       },
     }),
-    { name: 'dukacore-cart' }
+    { name: 'mavine-households-cart' }
   )
 )

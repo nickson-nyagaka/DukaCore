@@ -21,6 +21,10 @@ class ProductImageSchema(Schema):
     alt_text: str
     is_primary: bool
 
+class PriceTierOutSchema(Schema):
+    min_quantity: int
+    unit_price: float
+
 class ProductSchema(Schema):
     id: int
     name: str
@@ -29,6 +33,7 @@ class ProductSchema(Schema):
     description: str
     stock_quantity: int
     is_active: bool
+    is_heavy_item: bool = False
     image_url: Optional[str] = None
     images: List[str] = []
     category_id: Optional[int] = None
@@ -36,6 +41,7 @@ class ProductSchema(Schema):
     reviews_count: int = 0
     is_wishlisted: bool = False
     attributes: list = []
+    price_tiers: List[PriceTierOutSchema] = []
     discount_price: Optional[float] = None
     flash_sale_end_date: Optional[datetime.datetime] = None
 
@@ -46,6 +52,7 @@ class StockAlertOutSchema(Schema):
     id: int
     product_id: int
     product_name: str
+    product_slug: str
     is_notified: bool
     notified_at: Optional[datetime.datetime] = None
 
@@ -63,8 +70,10 @@ class ProductListSchema(Schema):
     price: float
     image_url: Optional[str] = None
     is_active: bool
+    is_heavy_item: bool = False
     stock_quantity: int
     attributes: list = []
+    price_tiers: List[PriceTierOutSchema] = []
     discount_price: Optional[float] = None
     flash_sale_end_date: Optional[datetime.datetime] = None
 
@@ -75,13 +84,21 @@ async def list_categories(request):
 
 @router.get("/products", response=List[ProductListSchema])
 async def list_products(request, category: Optional[str] = None, search: Optional[str] = None, limit: int = 24, offset: int = 0):
-    from django.db.models import Prefetch
+    from django.db.models import Prefetch, Case, When, Value, IntegerField
     from .models import ProductImage
     
-    primary_images = ProductImage.objects.filter(is_primary=True)
-    qs = Product.objects.filter(is_active=True).prefetch_related(
-        Prefetch('images', queryset=primary_images, to_attr='primary_images')
-    )
+    product_images = ProductImage.objects.order_by('-is_primary', 'id')
+    # Order active products first so active catalog is prioritized, then by created_at
+    qs = Product.objects.prefetch_related(
+        Prefetch('images', queryset=product_images, to_attr='ordered_images')
+    ).annotate(
+        active_order=Case(
+            When(is_active=True, then=Value(0)),
+            default=Value(1),
+            output_field=IntegerField()
+        )
+    ).order_by('active_order', '-created_at')
+
     if category:
         qs = qs.filter(category__slug=category)
     if search:
@@ -90,7 +107,7 @@ async def list_products(request, category: Optional[str] = None, search: Optiona
 
     result = []
     async for p in qs:
-        primary = p.primary_images[0] if p.primary_images else None
+        primary = p.ordered_images[0] if p.ordered_images else None
         result.append(ProductListSchema(
             id=p.id,
             name=p.name,
@@ -107,7 +124,7 @@ async def list_products(request, category: Optional[str] = None, search: Optiona
 
 @router.get("/products/{slug}", response=ProductSchema)
 async def get_product(request, slug: str):
-    product = await Product.objects.filter(slug=slug).prefetch_related('images').afirst()
+    product = await Product.objects.filter(slug=slug).prefetch_related('images', 'price_tiers').afirst()
     
     if not product:
         raise HttpError(404, "Product not found")
@@ -140,6 +157,11 @@ async def get_product(request, slug: str):
         rating_sum += r.rating
     avg_rating = rating_sum / reviews_count if reviews_count > 0 else None
     
+    tiers = [
+        PriceTierOutSchema(min_quantity=t.min_quantity, unit_price=float(t.unit_price))
+        async for t in product.price_tiers.all()
+    ]
+
     return ProductSchema(
         id=product.id,
         name=product.name,
@@ -148,6 +170,7 @@ async def get_product(request, slug: str):
         description=product.description,
         stock_quantity=product.stock_quantity,
         is_active=product.is_active,
+        is_heavy_item=product.is_heavy_item,
         image_url=primary.url if primary else None,
         images=image_urls,
         category_id=product.category_id,
@@ -155,6 +178,7 @@ async def get_product(request, slug: str):
         reviews_count=reviews_count,
         is_wishlisted=is_wishlisted,
         attributes=product.attributes,
+        price_tiers=tiers,
         discount_price=float(product.discount_price) if product.discount_price else None,
         flash_sale_end_date=product.flash_sale_end_date
     )
@@ -196,8 +220,8 @@ def get_wishlist(request):
 def create_stock_alert(request, product_id: int):
     user = request.user
     product = get_object_or_404(Product, id=product_id)
-    if product.stock_quantity > 0:
-        raise HttpError(400, "Product is currently in stock")
+    if product.is_active and product.stock_quantity > 0:
+        raise HttpError(400, "Product is currently active and in stock")
     alert, created = StockAlert.objects.get_or_create(user=user, product=product, is_active=True)
     return {"status": "created" if created else "exists"}
 
@@ -210,6 +234,7 @@ def get_stock_alerts(request):
             id=alert.id,
             product_id=alert.product.id,
             product_name=alert.product.name,
+            product_slug=alert.product.slug,
             is_notified=alert.is_notified,
             notified_at=alert.notified_at
         ) for alert in alerts

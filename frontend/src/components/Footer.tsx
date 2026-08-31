@@ -14,11 +14,10 @@ export default function Footer() {
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
             <div className="text-lg font-black tracking-tight mb-3" style={{ fontFamily: 'var(--font-heading)' }}>
-              <span className="text-primary">Duka</span>
-              <span className="text-accent">Core</span>
+              <span className="text-primary">Mavine</span> <span className="text-accent">Households</span>
             </div>
             <p className="text-sm text-muted leading-relaxed font-medium">
-              E-commerce platform. Launch your store in seconds.
+              Your trusted home goods destination. Kitchenware, bedding, home appliances, storage, and furniture delivered to your doorstep.
             </p>
           </div>
 
@@ -26,7 +25,7 @@ export default function Footer() {
           <div>
             <h4 className="text-sm font-bold mb-3 text-foreground">Shop</h4>
             <ul className="space-y-2">
-              {['Phones & Tablets', 'Computing', 'Electronics', 'Fashion', 'Home & Living'].map(c => (
+              {['Kitchenware & Dining', 'Home Appliances', 'Bedding & Bedroom', 'Carpets & Flooring', 'Furniture & Storage'].map(c => (
                 <li key={c}>
                   <Link href="/" className="text-sm text-muted hover:text-primary transition-colors font-medium">{c}</Link>
                 </li>
@@ -36,19 +35,29 @@ export default function Footer() {
 
           {/* Help */}
           <div>
-            <h4 className="text-sm font-bold mb-3 text-foreground">Help</h4>
+            <h4 className="text-sm font-bold mb-3 text-foreground">Help & Orders</h4>
             <ul className="space-y-2">
-              {['Track My Order', 'Returns Policy', 'Delivery Info', 'FAQs', 'Contact Us'].map(i => (
+              {['Track My Order', 'Delivery Info & Rates', 'Bulk / Event Orders', 'M-Pesa Payment Help'].map(i => (
                 <li key={i}>
                   <Link href="/" className="text-sm text-muted hover:text-primary transition-colors font-medium">{i}</Link>
                 </li>
               ))}
+              <li>
+                <a 
+                  href="https://wa.me/254715454643" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-sm text-[#25D366] hover:underline font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>💬 WhatsApp: 0715 454643</span>
+                </a>
+              </li>
             </ul>
           </div>
         </div>
 
         <div className="mt-10 pt-6 border-t border-border text-center text-xs text-muted font-medium">
-          © {new Date().getFullYear()} DukaCore. All rights reserved.
+          &copy; {new Date().getFullYear()} Mavine Households. All rights reserved.
         </div>
       </div>
     </footer>

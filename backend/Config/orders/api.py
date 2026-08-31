@@ -6,8 +6,8 @@ from django.conf import settings
 from ninja.errors import HttpError
 from auth_app.auth import JWTAuth
 from catalog.models import Product, Voucher
-from cart.api import get_cart
-from .models import Order, OrderItem, Payment, Review
+from cart.api import get_cart, calculate_unit_price
+from .models import Order, OrderItem, Payment, Review, DeliveryZone
 from users.models import AuditLog
 import datetime
 import base64
@@ -16,11 +16,38 @@ from django.http import JsonResponse
 
 router = Router()
 
+class DeliveryZoneOutSchema(Schema):
+    id: int
+    name: str
+    slug: str
+    description: str
+    flat_fee: float
+    heavy_item_surcharge: float
+    estimated_delivery: str
+    is_pickup: bool
+
 class CheckoutSchema(Schema):
     phone_number: str  # For M-Pesa push
     shipping_address: str
+    delivery_zone_id: Optional[int] = None
     payment_method: str = "MOCK"  # MOCK or MPESA
-    voucher_code: str = None
+    voucher_code: Optional[str] = None
+
+@router.get('/delivery-zones', response=List[DeliveryZoneOutSchema])
+def list_delivery_zones(request):
+    zones = DeliveryZone.objects.filter(is_active=True)
+    return [
+        DeliveryZoneOutSchema(
+            id=z.id,
+            name=z.name,
+            slug=z.slug,
+            description=z.description,
+            flat_fee=float(z.flat_fee),
+            heavy_item_surcharge=float(z.heavy_item_surcharge),
+            estimated_delivery=z.estimated_delivery,
+            is_pickup=z.is_pickup
+        ) for z in zones
+    ]
 
 class OrderItemOutSchema(Schema):
     id: int
@@ -240,9 +267,7 @@ def checkout(request, data: CheckoutSchema):
             product.stock_quantity -= qty
             product.save()
 
-            from django.utils import timezone
-            is_flash_sale = product.discount_price and product.flash_sale_end_date and product.flash_sale_end_date > timezone.now()
-            unit_price = float(product.discount_price) if is_flash_sale else float(product.price)
+            unit_price, _ = calculate_unit_price(product, qty)
 
             item_subtotal = unit_price * qty
             total_amount += item_subtotal
@@ -272,15 +297,11 @@ def checkout(request, data: CheckoutSchema):
             if voucher.usage_limit_total is not None and voucher.usage_count >= voucher.usage_limit_total:
                 raise HttpError(400, "Voucher usage limit reached")
                 
-            # Note: per-customer usage tracking could be added here
-            
             if voucher.discount_type == 'PERCENT':
                 discount_amount = total_amount * (float(voucher.value) / 100)
             elif voucher.discount_type == 'FIXED':
                 discount_amount = float(voucher.value)
             elif voucher.discount_type == 'FREE_SHIPPING':
-                # Assuming shipping is added elsewhere, if not, we can zero out shipping.
-                # For now, it doesn't change subtotal.
                 pass
                 
             if discount_amount > total_amount:
@@ -291,10 +312,28 @@ def checkout(request, data: CheckoutSchema):
             voucher.usage_count += 1
             voucher.save()
 
+        # Delivery zone calculation
+        has_heavy = any(it['product'].is_heavy_item for it in locked_items)
+        shipping_fee = 0.0
+        delivery_zone = None
+        if data.delivery_zone_id:
+            delivery_zone = DeliveryZone.objects.filter(id=data.delivery_zone_id, is_active=True).first()
+            if delivery_zone:
+                shipping_fee = float(delivery_zone.flat_fee) + (float(delivery_zone.heavy_item_surcharge) if has_heavy else 0.0)
+
+        if applied_voucher and applied_voucher.discount_type == 'FREE_SHIPPING':
+            shipping_fee = 0.0
+
+        final_order_total = round(total_amount + shipping_fee, 2)
+
         order = Order.objects.create(
             customer=user,
-            total_amount=total_amount,
+            total_amount=final_order_total,
             discount_amount=discount_amount,
+            delivery_zone=delivery_zone,
+            shipping_fee=shipping_fee,
+            is_heavy_order=has_heavy,
+            shipping_address=data.shipping_address,
             voucher=applied_voucher,
             voucher_code_snapshot=applied_voucher.code if applied_voucher else "",
             status='PENDING'
@@ -310,7 +349,7 @@ def checkout(request, data: CheckoutSchema):
 
         payment = Payment.objects.create(
             order=order,
-            amount=total_amount,
+            amount=final_order_total,
             status='PENDING',
             payment_method=data.payment_method,
             phone_number_used=data.phone_number
@@ -328,11 +367,10 @@ def checkout(request, data: CheckoutSchema):
                 raise HttpError(500, "Failed to initiate payment via gateway")
 
         try:
-            import redis
-            r = redis.from_url(settings.REDIS_URL)
-            r.delete(f"cart:{user.id}")
+            from django.core.cache import cache
+            cache.delete(f"cart:{user.id}")
         except Exception as e:
-            print(f"Error clearing Redis cart: {e}")
+            print(f"Error clearing cart: {e}")
 
         AuditLog.log(user, "order.checkout", {"order_id": order.id, "total_amount": float(total_amount)})
 

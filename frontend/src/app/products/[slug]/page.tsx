@@ -58,6 +58,28 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                 </div>
               )
             })()}
+
+            {/* Heavy Item Badge */}
+            {product.is_heavy_item && (
+              <div className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-mv-teal-800/10 text-mv-teal-600 border border-mv-teal-600/20">
+                <span>🚛 Bulky / Heavy Item Delivery</span>
+              </div>
+            )}
+
+            {/* Bulk / Tiered Pricing Table */}
+            {product.price_tiers && product.price_tiers.length > 0 && (
+              <div className="mt-4 p-4 rounded-2xl glass border border-primary/20 space-y-2">
+                <h4 className="text-xs font-black uppercase tracking-wider text-primary">📦 Bulk Volume Savings</h4>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {product.price_tiers.map((tier: any, idx: number) => (
+                    <div key={idx} className="p-2 rounded-xl bg-surface border border-border flex justify-between items-center">
+                      <span className="font-semibold text-muted">{tier.min_quantity}+ units</span>
+                      <span className="font-black text-primary">KES {Number(tier.unit_price).toLocaleString()}/ea</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <p className="text-sm text-muted dark:text-muted-dark leading-relaxed">

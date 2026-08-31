@@ -35,12 +35,16 @@ SESSION_COOKIE_SAMESITE = "Strict"
 CORS_ALLOWED_ORIGINS = [
     os.environ.get("STOREFRONT_URL", "http://localhost:3000"),
     os.environ.get("ADMIN_URL", "http://localhost:3002"),
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3002",
 ]
 CORS_ALLOW_CREDENTIALS = True
 
 CSRF_TRUSTED_ORIGINS = [
     os.environ.get("STOREFRONT_URL", "http://localhost:3000"),
     os.environ.get("ADMIN_URL", "http://localhost:3002"),
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3002",
 ]
 
 INSTALLED_APPS = [
@@ -92,7 +96,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'Config.wsgi.application'
 
 # -------------------------------------------------------------------
-# Database
+# Database (PostgreSQL)
 # -------------------------------------------------------------------
 DATABASES = {
     'default': {
@@ -101,21 +105,32 @@ DATABASES = {
         'USER': os.environ.get('DB_USER', 'nickson_nyagaka'),
         'PASSWORD': os.environ.get('DB_PASSWORD', 'JoanJuma@254'),
         'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', '5433'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
+        'OPTIONS': {
+            'sslmode': os.environ.get('DB_SSLMODE', 'disable'),
+        },
     }
 }
 
 # -------------------------------------------------------------------
-# Redis Cache (for cart storage)
+# Cache (LocMem for local dev by default, Redis if REDIS_URL provided)
 # -------------------------------------------------------------------
-REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6380/0')
+REDIS_URL = os.environ.get('REDIS_URL')
 
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.redis.RedisCache',
-        'LOCATION': REDIS_URL,
+if REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': REDIS_URL,
+        }
     }
-}
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'mavine-households-cache',
+        }
+    }
 
 # -------------------------------------------------------------------
 # JWT Settings

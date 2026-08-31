@@ -47,21 +47,26 @@ export default function AdminSidebar() {
     >
       {/* Header / Logo */}
       <div className="h-16 flex items-center justify-between px-4 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
-        {!collapsed && (
-          <Link href="/" className="flex items-center gap-1 select-none overflow-hidden whitespace-nowrap">
-            <span className="text-xl font-black tracking-tight text-primary" style={{ fontFamily: 'var(--font-heading)' }}>Duka</span>
-            <span className="text-xl font-black tracking-tight text-accent" style={{ fontFamily: 'var(--font-heading)' }}>Core</span>
+        {!collapsed ? (
+          <Link href="/" className="flex items-center gap-1.5 select-none overflow-hidden whitespace-nowrap">
+            <span className="text-xl font-black tracking-tight text-primary" style={{ fontFamily: 'var(--font-heading)' }}>Mavine</span>
+            <span className="text-xl font-black tracking-tight text-accent" style={{ fontFamily: 'var(--font-heading)' }}>Households</span>
             <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full tracking-widest uppercase" 
               style={{ background: 'var(--primary-light)', color: 'var(--primary)' }}>
               Admin
             </span>
           </Link>
+        ) : (
+          <Link href="/" className="mx-auto text-xl font-black text-primary select-none" style={{ fontFamily: 'var(--font-heading)' }}>
+            M
+          </Link>
         )}
         <button 
           onClick={() => setCollapsed(!collapsed)} 
-          className={`p-2 rounded-lg text-muted hover:bg-primary/10 hover:text-primary transition-colors ${collapsed ? 'mx-auto' : ''}`}
+          className={`p-2 rounded-lg text-muted hover:bg-primary/10 hover:text-primary transition-colors ${collapsed ? 'mt-1' : ''}`}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
-          <Menu size={20} />
+          <Menu size={18} />
         </button>
       </div>
 
@@ -108,7 +113,7 @@ export default function AdminSidebar() {
           <Store size={collapsed ? 20 : 14} className="shrink-0" />
           {!collapsed && <span className="whitespace-nowrap overflow-hidden">View Storefront</span>}
         </Link>
-        {!collapsed && <p className="mt-2 text-[10px] whitespace-nowrap overflow-hidden" style={{ color: 'var(--muted)' }}>DukaCore v1.0</p>}
+        {!collapsed && <p className="mt-2 text-[10px] whitespace-nowrap overflow-hidden" style={{ color: 'var(--muted)' }}>Mavine Households v1.0</p>}
       </div>
     </aside>
   )

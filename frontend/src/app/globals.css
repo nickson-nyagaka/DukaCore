@@ -5,6 +5,17 @@
   --font-heading: 'Raleway', sans-serif;
   --font-body: 'Cantarell', sans-serif;
 
+  /* Mavine Households Custom Palette Tokens */
+  --color-mv-violet-600: #504ed4;
+  --color-mv-purple-500: #9d59df;
+  --color-mv-violet-700: #5239dc;
+  --color-mv-teal-800:   #085f87;
+  --color-mv-pink-400:   #d970d6;
+  --color-mv-blue-500:   #3871e0;
+  --color-mv-indigo-900: #2c278d;
+  --color-mv-teal-600:   #0d90bc;
+  --color-mv-indigo-700: #234396;
+
   /* Semantic Surface Mappings */
   --color-surface: var(--surface);
   --color-card: var(--card);
@@ -17,7 +28,7 @@
   /* Semantic Border Mappings */
   --color-border: var(--border);
 
-  /* Brand Mappings (Axis 2 - Tenant Identity) */
+  /* Brand Mappings (Mavine Households Identity) */
   --color-primary: var(--primary);
   --color-primary-hover: var(--primary-hover);
   --color-primary-light: var(--primary-light);
@@ -66,77 +77,88 @@
   100% { background-position: 200% 0; }
 }
 
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  display: flex;
+  width: max-content;
+  animation: marquee 75s linear infinite;
+}
+
+.pause-hover:hover .animate-marquee {
+  animation-play-state: paused;
+}
+
+
 /* ─── Axis 1: Theme Mode Tokens (data-theme) ─── */
 
 /* Default Mode: DARK */
 :root,
 [data-theme="dark"] {
-  --surface: #080B13;
-  --card: #0F172A;
-  --navbar: rgba(15, 23, 42, 0.9);
-  --foreground: #F1F5F9;
-  --muted: #94A3B8;
-  --border: rgba(255, 255, 255, 0.08);
+  --surface: #0a0918;
+  --card: #12102e;
+  --navbar: rgba(18, 16, 46, 0.92);
+  --foreground: #f8fafc;
+  --muted: #a5b4fc;
+  --border: rgba(217, 112, 214, 0.15);
 
-  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 20px 40px -15px rgba(0, 0, 0, 0.5);
-  --shadow-nav: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.3), 0 20px 40px -15px rgba(44, 39, 141, 0.4);
+  --shadow-nav: 0 1px 3px rgba(0, 0, 0, 0.4);
 
-  --success: #22C55E;
-  --warning: #F59E0B;
-  --danger: #EF4444;
-  --info: #3B82F6;
+  --primary: #504ed4;
+  --primary-hover: #5239dc;
+  --primary-light: rgba(80, 78, 212, 0.2);
+  --accent: #d970d6;
+  --accent-hover: #9d59df;
+
+  --success: #00ce63;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --info: #3871e0;
 
   color-scheme: dark;
 }
 
 /* Light Mode: High-Contrast Soft Palette */
 [data-theme="light"] {
-  --surface: #F8FAFC;         /* Soft off-white app canvas */
-  --card: #FFFFFF;            /* Elevated crisp white panel */
-  --navbar: #FFFFFF;          /* Pure white navbar surface */
-  --foreground: #0F172A;      /* Deep Charcoal text (14:1 contrast ratio) */
-  --muted: #475569;           /* Dark Slate secondary text (7.1:1 contrast ratio) */
-  --border: #CBD5E1;          /* Visible divider border */
+  --surface: #f7f7fe;         /* Soft off-white app canvas */
+  --card: #ffffff;            /* Elevated crisp white panel */
+  --navbar: #ffffff;          /* Pure white navbar surface */
+  --foreground: #141238;      /* Deep Indigo text (14:1 contrast ratio) */
+  --muted: #4f537d;           /* Slate secondary text (7.1:1 contrast ratio) */
+  --border: #e0e1f7;          /* Soft border */
 
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 8px 24px -8px rgba(0, 0, 0, 0.08);
-  --shadow-nav: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 1px 3px rgba(44, 39, 141, 0.06), 0 8px 24px -8px rgba(44, 39, 141, 0.1);
+  --shadow-nav: 0 1px 3px rgba(44, 39, 141, 0.05);
 
-  --success: #16A34A;
-  --warning: #D97706;
-  --danger: #DC2626;
-  --info: #2563EB;
+  --primary: #504ed4;
+  --primary-hover: #5239dc;
+  --primary-light: rgba(80, 78, 212, 0.12);
+  --accent: #d970d6;
+  --accent-hover: #9d59df;
+
+  --success: #00ce63;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --info: #3871e0;
 
   color-scheme: light;
 }
 
 /* ─── Axis 2: Tenant Brand Tokens (data-brand) ─── */
 
-/* Default Tenant Brand: DukaCore Indigo/Rose */
+/* Default Tenant Brand: Mavine Households */
 :root,
-[data-brand="default"] {
-  --primary: #4F46E5;
-  --primary-hover: #3730A3;
-  --primary-light: rgba(79, 70, 229, 0.1);
-  --accent: #E11D48;
-  --accent-hover: #BE123C;
-}
-
-/* Example Tenant Brand: Emerald Marketplace */
-[data-brand="emerald"] {
-  --primary: #059669;
-  --primary-hover: #047857;
-  --primary-light: rgba(5, 150, 105, 0.1);
-  --accent: #D97706;
-  --accent-hover: #B45309;
-}
-
-/* Example Tenant Brand: Royal Violet */
-[data-brand="violet"] {
-  --primary: #7C3AED;
-  --primary-hover: #6D28D9;
-  --primary-light: rgba(124, 58, 237, 0.1);
-  --accent: #06B6D4;
-  --accent-hover: #0891B2;
+[data-brand="default"],
+[data-brand="mavine"] {
+  --primary: #504ed4;
+  --primary-hover: #5239dc;
+  --primary-light: rgba(80, 78, 212, 0.12);
+  --accent: #d970d6;
+  --accent-hover: #9d59df;
 }
 
 /* ─── Base Layer ─────────────────────────────── */

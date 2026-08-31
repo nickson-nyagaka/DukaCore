@@ -14,7 +14,8 @@ export async function serverFetch(path: string, options?: RequestInit) {
     .map((c) => `${c.name}=${c.value}`)
     .join('; ')
 
-  const res = await fetch(`http://backend:8000${path}`, {
+  const baseUrl = process.env.BACKEND_URL || 'http://127.0.0.1:8000'
+  const res = await fetch(`${baseUrl}${path}`, {
     ...options,
     headers: {
       Host: host,

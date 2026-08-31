@@ -1,1 +1,1 @@
-# DukaCore Permissions Module
+# Mavine Households Permissions Module

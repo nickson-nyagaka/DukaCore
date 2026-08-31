@@ -72,6 +72,7 @@ interface StockAlert {
   id: number
   product_id: number
   product_name: string
+  product_slug?: string
   is_notified: boolean
   notified_at?: string
 }
@@ -543,7 +544,7 @@ export default function AccountPage() {
                       {selectedOrder.status_history.map((history, idx) => (
                         <div key={`${idx}-${history.changed_at}`} className="flex gap-4 text-xs">
                           <span className="text-muted w-24 shrink-0 font-medium">{new Date(history.changed_at).toLocaleDateString()}</span>
-                          <span className="font-extrabold text-foreground">{history.to_status}</span>
+                          <span className="font-extrabold text-foreground">{history.status}</span>
                           <span className="text-muted italic">({history.changed_by_email})</span>
                         </div>
                       ))}
@@ -655,19 +656,19 @@ export default function AccountPage() {
                         {alert.is_notified ? (
                           <span className="inline-flex items-center gap-1.5 text-xs text-success font-bold mt-1.5 bg-success/10 px-2.5 py-1 rounded-full">
                             <CheckCircle2 size={12} />
-                            Back in Stock!
+                            Back in Stock & Available!
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1.5 text-xs text-muted font-bold mt-1.5 bg-muted/10 px-2.5 py-1 rounded-full">
+                          <span className="inline-flex items-center gap-1.5 text-xs text-amber-500 font-bold mt-1.5 bg-amber-500/10 px-2.5 py-1 rounded-full">
                             <Clock size={12} />
-                            Awaiting stock replenishment
+                            Awaiting restock / reactivation
                           </span>
                         )}
                       </div>
                       
                       <div className="flex items-center gap-3 shrink-0">
                         {alert.is_notified && (
-                          <Link href={`/products/${alert.product_name.toLowerCase().replace(/ /g, '-')}`} className="px-3.5 py-1.5 bg-success text-success-foreground hover:bg-success/90 text-xs font-extrabold rounded-full transition-colors border-none">
+                          <Link href={`/products/${alert.product_slug || alert.product_name.toLowerCase().replace(/ /g, '-')}`} className="px-3.5 py-1.5 bg-success text-success-foreground hover:bg-success/90 text-xs font-extrabold rounded-full transition-colors border-none">
                             View Product
                           </Link>
                         )}

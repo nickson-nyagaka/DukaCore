@@ -47,7 +47,7 @@ function RegisterForm() {
       {/* Logo */}
       <div className="text-center mb-6">
         <div className="text-2xl font-black tracking-tight" style={{ fontFamily: 'var(--font-heading)' }}>
-          <span className="text-primary">Duka</span><span className="text-accent">Core</span>
+          <span className="text-primary">Mavine</span> <span className="text-accent">Households</span>
         </div>
       </div>
 
@@ -55,7 +55,7 @@ function RegisterForm() {
         Create your account
       </h1>
       <p className="text-sm text-muted text-center mb-6">
-        Join thousands of shoppers and vendors on DukaCore
+        Join Mavine Households for quick orders & fast delivery
       </p>
 
       {error && (

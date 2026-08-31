@@ -9,6 +9,9 @@ User = get_user_model()
 class JWTAuth(APIKeyCookie):
     param_name = "mve_access_token"
 
+    def __init__(self, csrf: bool = False):
+        super().__init__(csrf=csrf)
+
     def authenticate(self, request, key: str):
         if not key:
             return None

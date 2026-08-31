@@ -5,15 +5,11 @@ from django.conf import settings
 from catalog.models import Product
 from auth_app.auth import JWTAuth
 
+from django.core.cache import cache
+
 router = Router()
 
 CART_TTL = 60 * 60 * 24 * 7  # 7 days
-
-
-def get_redis():
-    import redis
-    r = redis.from_url(settings.REDIS_URL)
-    return r
 
 
 def cart_key(user_id: int) -> str:
@@ -21,16 +17,19 @@ def cart_key(user_id: int) -> str:
 
 
 def get_cart(user_id: int) -> dict:
-    r = get_redis()
-    raw = r.get(cart_key(user_id))
+    raw = cache.get(cart_key(user_id))
     if raw:
-        return json.loads(raw)
+        if isinstance(raw, dict):
+            return raw
+        try:
+            return json.loads(raw)
+        except Exception:
+            return {"items": []}
     return {"items": []}
 
 
 def save_cart(user_id: int, cart: dict):
-    r = get_redis()
-    r.setex(cart_key(user_id), CART_TTL, json.dumps(cart))
+    cache.set(cart_key(user_id), cart, CART_TTL)
 
 
 class CartItemIn(Schema):
@@ -43,40 +42,66 @@ class CartItemSchema(Schema):
     quantity: int
     name: str
     price: float
+    original_price: float
     image_url: Optional[str] = None
     slug: str
+    is_heavy_item: bool = False
+    tier_discount_applied: bool = False
 
 
 class CartSchema(Schema):
     items: List[CartItemSchema]
     total: float
     item_count: int
+    has_heavy_items: bool = False
+
+
+def calculate_unit_price(product: Product, quantity: int):
+    from django.utils import timezone
+    now = timezone.now()
+    is_flash_sale = product.discount_price and product.flash_sale_end_date and product.flash_sale_end_date > now
+    if is_flash_sale:
+        return float(product.discount_price), False
+    
+    tier = product.price_tiers.filter(min_quantity__lte=quantity).order_by('-min_quantity').first()
+    if tier:
+        return float(tier.unit_price), True
+    return float(product.price), False
 
 
 def enrich_cart(cart: dict) -> CartSchema:
     enriched_items = []
     total = 0.0
+    has_heavy = False
     for item in cart['items']:
         try:
-            product = Product.objects.get(id=item['product_id'])
-            primary = product.images.filter(is_primary=True).first()
+            product = Product.objects.prefetch_related('images', 'price_tiers').get(id=item['product_id'])
+            primary = product.images.filter(is_primary=True).first() or product.images.first()
             
-            from django.utils import timezone
-            is_flash_sale = product.discount_price and product.flash_sale_end_date and product.flash_sale_end_date > timezone.now()
-            unit_price = float(product.discount_price) if is_flash_sale else float(product.price)
+            unit_price, tier_applied = calculate_unit_price(product, item['quantity'])
+            if product.is_heavy_item:
+                has_heavy = True
             
             enriched_items.append(CartItemSchema(
                 product_id=product.id,
                 quantity=item['quantity'],
                 name=product.name,
                 price=unit_price,
+                original_price=float(product.price),
                 image_url=primary.url if primary else None,
                 slug=product.slug,
+                is_heavy_item=product.is_heavy_item,
+                tier_discount_applied=tier_applied,
             ))
             total += unit_price * item['quantity']
         except Product.DoesNotExist:
             pass
-    return CartSchema(items=enriched_items, total=round(total, 2), item_count=sum(i['quantity'] for i in cart['items']))
+    return CartSchema(
+        items=enriched_items, 
+        total=round(total, 2), 
+        item_count=sum(i['quantity'] for i in cart['items']),
+        has_heavy_items=has_heavy,
+    )
 
 
 @router.get('', auth=JWTAuth(), response=CartSchema)
@@ -130,6 +155,5 @@ def remove_item(request, product_id: int):
 
 @router.delete('', auth=JWTAuth())
 def clear_cart(request):
-    r = get_redis()
-    r.delete(cart_key(request.user.id))
+    cache.delete(cart_key(request.user.id))
     return {"message": "Cart cleared"}

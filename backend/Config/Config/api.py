@@ -7,7 +7,7 @@ from catalog.admin_api import router as admin_catalog_router
 from users.admin_api import router as admin_users_router
 from metrics.api import router as admin_metrics_router
 
-api = NinjaAPI(title="MVE API", version="2.0.0", description="Multi-Vendor E-Commerce Platform API")
+api = NinjaAPI(title="Mavine Households API", version="2.0.0", description="Mavine Households Storefront & Admin API")
 
 api.add_router("/catalog", catalog_router, tags=["Catalog"])
 api.add_router("/auth", auth_router, tags=["Auth"])
